@@ -1,108 +1,146 @@
 package net.spindle.createwarehouse.block;
 
-import com.simibubi.create.AllDisplaySources;
-import com.simibubi.create.AllMountedStorageTypes;
-import com.simibubi.create.content.logistics.depot.MountedDepotInteractionBehaviour;
-import com.simibubi.create.foundation.data.AssetLookup;
-import com.simibubi.create.foundation.data.BuilderTransformers;
 import com.simibubi.create.foundation.data.SharedProperties;
-import com.tterrag.registrate.builders.BlockBuilder;
 import com.tterrag.registrate.util.entry.BlockEntry;
-import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.NetherrackBlock;
 import net.minecraft.world.level.block.SoundType;
-import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.registries.DeferredBlock;
-import net.neoforged.neoforge.registries.DeferredRegister;
-import net.spindle.createwarehouse.CreateWarehouse;
 import net.spindle.createwarehouse.block.custom.CratePackagerBlock;
 import net.spindle.createwarehouse.block.custom.CratePackagerStructuralBlock;
-import net.spindle.createwarehouse.block.custom.DrumPackagerBlock;
-import net.spindle.createwarehouse.block.custom.LargeDepot;
-import net.spindle.createwarehouse.item.ModItems;
+import net.spindle.createwarehouse.block.custom.MultiblockDecorationBlock;
+import net.spindle.createwarehouse.block.custom.MultiblockPartBlock;
+import net.spindle.createwarehouse.block.custom.StaticShapeBlock;
+import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.world.phys.shapes.Shapes;
 
-import java.util.function.Supplier;
-
-
-import static com.simibubi.create.api.behaviour.display.DisplaySource.displaySource;
-import static com.simibubi.create.api.behaviour.interaction.MovingInteractionBehaviour.interactionBehaviour;
-import static com.simibubi.create.api.contraption.storage.item.MountedItemStorageType.mountedItemStorage;
-import static com.simibubi.create.foundation.data.ModelGen.customItemModel;
-import static com.simibubi.create.foundation.data.TagGen.axeOrPickaxe;
 import static net.spindle.createwarehouse.CreateWarehouse.WAREHOUSE_REGISTRATE;
+import static net.spindle.createwarehouse.block.custom.MultiblockDecorationBlock.PartPlacement.at;
+import static net.spindle.createwarehouse.block.custom.MultiblockPartBlock.PartShape.FULL;
+import static net.spindle.createwarehouse.block.custom.MultiblockPartBlock.PartShape.LOW;
 
-public class ModBlocks {
-//    public static final DeferredRegister.Blocks BLOCKS =
-//            DeferredRegister.createBlocks(CreateWarehouse.MODID);
+public final class ModBlocks {
+    public static final BlockEntry<MultiblockPartBlock> MULTIBLOCK_PART = WAREHOUSE_REGISTRATE
+            .block("multiblock_part", MultiblockPartBlock::new)
+            .initialProperties(SharedProperties::softMetal)
+            .properties(properties -> properties
+                    .noOcclusion()
+                    .isRedstoneConductor((state, level, pos) -> false))
+            .register();
 
-//    public static final DeferredBlock<DrumPackagerBlock> DRUM_PACKAGER = registerBlock("drum_packager",
-//            () -> new DrumPackagerBlock(BlockBehaviour.Properties.of()
-//                    .strength(4f).requiresCorrectToolForDrops().sound(SoundType.COPPER)));
+    public static final BlockEntry<MultiblockDecorationBlock> DRUM_PACKAGER = metalMultiblock(
+            "drum_packager", Block.box(0, 0, 0, 16, 16, 16),
+            at(0, 1, 0, FULL));
 
-    public static final BlockEntry<DrumPackagerBlock> DRUM_PACKAGER = WAREHOUSE_REGISTRATE.block("drum_packager",
-            DrumPackagerBlock::new)
-            .transform(BuilderTransformers.packager())
+    public static final BlockEntry<CratePackagerBlock> CRATE_PACKAGER = WAREHOUSE_REGISTRATE
+            .block("crate_packager", CratePackagerBlock::new)
+            .initialProperties(SharedProperties::softMetal)
+            .properties(properties -> properties
+                    .mapColor(MapColor.TERRACOTTA_BLUE)
+                    .sound(SoundType.NETHERITE_BLOCK)
+                    .noOcclusion()
+                    .isRedstoneConductor((state, level, pos) -> false))
             .simpleItem()
             .register();
 
-//    public static final DeferredBlock<CratePackagerBlock> CRATE_PACKAGER = registerBlock("crate_packager",
-//            () -> new CratePackagerBlock(BlockBehaviour.Properties.of()
-//                    .strength(4f).requiresCorrectToolForDrops().sound(SoundType.NETHERITE_BLOCK)));
-
-    public static final BlockEntry<CratePackagerBlock> CRATE_PACKAGER = WAREHOUSE_REGISTRATE.block("crate_packager",
-                CratePackagerBlock::new)
-            .transform(BuilderTransformers.packager())
-            .simpleItem()
+    public static final BlockEntry<CratePackagerStructuralBlock> CRATE_PACKAGER_STRUCTURAL = WAREHOUSE_REGISTRATE
+            .block("crate_packager_structural", CratePackagerStructuralBlock::new)
+            .initialProperties(SharedProperties::softMetal)
+            .properties(properties -> properties
+                    .mapColor(MapColor.TERRACOTTA_BLUE)
+                    .sound(SoundType.NETHERITE_BLOCK)
+                    .noOcclusion()
+                    .isRedstoneConductor((state, level, pos) -> false))
             .register();
 
-//    public static final DeferredBlock<CratePackagerStructuralBlock> CRATE_PACKAGER_SRUCTURAL = registerBlock("crate_packager_structural",
-//            () -> new CratePackagerStructuralBlock(BlockBehaviour.Properties.of()
-//                    .strength(4f).requiresCorrectToolForDrops().sound(SoundType.NETHERITE_BLOCK)));
+    public static final BlockEntry<MultiblockDecorationBlock> LARGE_DEPOT = metalMultiblock(
+            "large_depot", Block.box(0, 0, 0, 16, 13, 16),
+            at(-1, 0, 0, LOW), at(0, 0, 1, LOW), at(-1, 0, 1, LOW));
+    public static final BlockEntry<MultiblockDecorationBlock> PALLET = woodenMultiblock(
+            "pallet", Block.box(0, 0, 0, 16, 16, 16),
+            at(-1, 0, 0, FULL), at(0, 0, 1, FULL), at(-1, 0, 1, FULL),
+            at(0, 1, 0, FULL), at(-1, 1, 0, FULL), at(0, 1, 1, FULL), at(-1, 1, 1, FULL));
+    public static final BlockEntry<MultiblockDecorationBlock> PALLET_DEPOT = metalMultiblock(
+            "pallet_depot", Block.box(0, 0, 0, 16, 13, 16),
+            at(-1, 0, 0, LOW), at(0, 0, 1, LOW), at(-1, 0, 1, LOW));
+    public static final BlockEntry<StaticShapeBlock> FLUID_DRUM = metalDecoration(
+            "fluid_drum", Block.box(2, 0, 2, 14, 14, 14));
+    public static final BlockEntry<StaticShapeBlock> ITEM_ELEVATOR_BOTTOM = metalDecoration(
+            "item_elevator_bottom", Block.box(0, 0, 0, 16, 16, 16));
+    public static final BlockEntry<StaticShapeBlock> ITEM_ELEVATOR_MIDDLE = metalDecoration(
+            "item_elevator_middle", Block.box(0, 0, 0, 16, 16, 16));
+    public static final BlockEntry<StaticShapeBlock> ITEM_ELEVATOR_TOP = metalDecoration(
+            "item_elevator_top", Block.box(0, 0, 0, 16, 16, 16));
+    public static final BlockEntry<MultiblockDecorationBlock> FORKLIFT = metalMultiblock(
+            "forklift", Shapes.or(
+                    Block.box(0, 0, 0, 16, 6, 16),
+                    Block.box(0, 6, 0, 4, 16, 16)),
+            at(-1, 0, -1, MultiblockPartBlock.PartShape.FORKLIFT_BASE),
+            at(0, 0, -1, MultiblockPartBlock.PartShape.FORKLIFT_BASE),
+            at(-1, 0, 0, MultiblockPartBlock.PartShape.FORKLIFT_BASE_ARM_LEFT),
+            at(-1, 1, 1, MultiblockPartBlock.PartShape.FORKLIFT_ARM_LEFT),
+            at(0, 1, 1, MultiblockPartBlock.PartShape.FORKLIFT_ARM_RIGHT),
+            at(-1, 1, 0, MultiblockPartBlock.PartShape.FORKLIFT_TOP_LEFT),
+            at(0, 1, 0, MultiblockPartBlock.PartShape.FORKLIFT_TOP_RIGHT),
+            at(-1, 1, -1, MultiblockPartBlock.PartShape.FORKLIFT_TOP_LEFT),
+            at(0, 1, -1, MultiblockPartBlock.PartShape.FORKLIFT_TOP_RIGHT),
+            at(-1, 1, -2, MultiblockPartBlock.PartShape.FORKLIFT_TOP_LEFT),
+            at(0, 1, -2, MultiblockPartBlock.PartShape.FORKLIFT_TOP_RIGHT),
+            at(-1, 1, -3, MultiblockPartBlock.PartShape.FORKLIFT_TIP_LEFT),
+            at(0, 1, -3, MultiblockPartBlock.PartShape.FORKLIFT_TIP_RIGHT));
 
-    public static final BlockEntry<CratePackagerStructuralBlock> CRATE_PACKAGER_STRUCTURAL = WAREHOUSE_REGISTRATE.block("crate_packager_structural",
-                CratePackagerStructuralBlock::new)
-            .transform(BuilderTransformers.packager())
-            .simpleItem()
-            .register();
+    private ModBlocks() {}
 
-//    public static final DeferredBlock<LargeDepot> LARGE_DEPOT = registerBlock("large_depot",
-//            () -> new LargeDepot(BlockBehaviour.Properties.of()
-//                    .strength(4f).requiresCorrectToolForDrops().sound(SoundType.STONE)));
-    // Large Depot axe and pickaxe, .initialProperties(SharedProperties::stone)
+    private static BlockEntry<StaticShapeBlock> metalDecoration(String name, VoxelShape shape) {
+        return WAREHOUSE_REGISTRATE.block(name, properties -> new StaticShapeBlock(properties, shape))
+                .initialProperties(SharedProperties::stone)
+                .properties(properties -> properties
+                        .mapColor(MapColor.COLOR_GRAY)
+                        .sound(SoundType.NETHERITE_BLOCK)
+                        .strength(3f)
+                        .noOcclusion())
+                .simpleItem()
+                .register();
+    }
 
-    public static final BlockEntry<LargeDepot> LARGE_DEPOT = WAREHOUSE_REGISTRATE.block("large_depot",
-                LargeDepot::new)
-            .initialProperties(SharedProperties::stone)
-            .properties(p -> p.mapColor(MapColor.COLOR_GRAY))
-            .transform(axeOrPickaxe())
-            .simpleItem()
-//            .blockstate((c, p) -> p.simpleBlock(c.getEntry(), AssetLookup.partialBaseModel(c, p)))
-//            .transform(displaySource(AllDisplaySources.ITEM_NAMES))
-//            .onRegister(interactionBehaviour(new MountedDepotInteractionBehaviour()))
-//            .transform(mountedItemStorage(AllMountedStorageTypes.DEPOT))
-//            .item()
-//            .transform(customItemModel("_", "block"))
-            .register();
+    private static BlockEntry<StaticShapeBlock> woodenDecoration(String name, VoxelShape shape) {
+        return WAREHOUSE_REGISTRATE.block(name, properties -> new StaticShapeBlock(properties, shape))
+                .initialProperties(SharedProperties::wooden)
+                .properties(properties -> properties
+                        .mapColor(MapColor.WOOD)
+                        .sound(SoundType.WOOD)
+                        .strength(2f)
+                        .noOcclusion())
+                .simpleItem()
+                .register();
+    }
 
+    private static BlockEntry<MultiblockDecorationBlock> metalMultiblock(
+            String name, VoxelShape shape, MultiblockDecorationBlock.PartPlacement... parts) {
+        return WAREHOUSE_REGISTRATE
+                .block(name, properties -> new MultiblockDecorationBlock(properties, shape, parts))
+                .initialProperties(SharedProperties::stone)
+                .properties(properties -> properties
+                        .mapColor(MapColor.COLOR_GRAY)
+                        .sound(SoundType.NETHERITE_BLOCK)
+                        .strength(3f)
+                        .noOcclusion())
+                .simpleItem()
+                .register();
+    }
 
-// TODO: update block sounds
+    private static BlockEntry<MultiblockDecorationBlock> woodenMultiblock(
+            String name, VoxelShape shape, MultiblockDecorationBlock.PartPlacement... parts) {
+        return WAREHOUSE_REGISTRATE
+                .block(name, properties -> new MultiblockDecorationBlock(properties, shape, parts))
+                .initialProperties(SharedProperties::wooden)
+                .properties(properties -> properties
+                        .mapColor(MapColor.WOOD)
+                        .sound(SoundType.WOOD)
+                        .strength(2f)
+                        .noOcclusion())
+                .simpleItem()
+                .register();
+    }
 
-//    private static <T extends Block> DeferredBlock<T> registerBlock(String name, Supplier<T> block) {
-//        DeferredBlock<T> toReturn = BLOCKS.register(name, block);
-//        registerBlockItem(name, toReturn);
-//        return toReturn;
-//    }
-//
-//    private static <T extends Block> void registerBlockItem(String name, DeferredBlock<T> block) {
-//        ModItems.ITEMS.register(name, () -> new BlockItem(block.get(), new Item.Properties()));
-//    }
-
-//    public static void register(IEventBus eventBus) {
-//        BLOCKS.register(eventBus);
-//    }
-    public static void register() {};
+    public static void register() {}
 }
