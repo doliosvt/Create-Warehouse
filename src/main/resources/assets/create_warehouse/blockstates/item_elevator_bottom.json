@@ -1,0 +1,5 @@
+{
+  "variants": {
+    "": { "model": "create_warehouse:block/item_elevator_bottom" }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "loader": "neoforge:composite",
+  "textures": {
+    "particle": "create_warehouse:block/forklift_a"
+  },
+  "children": {
+    "block": {
+      "parent": "create_warehouse:block/forklift/block"
+    },
+    "cog": {
+      "parent": "create_warehouse:block/forklift/cog",
+      "transform": {
+        "translation": [0, 0.375, 0],
+        "origin": "corner"
+      }
+    },
+    "base": {
+      "parent": "create_warehouse:block/forklift/base",
+      "transform": {
+        "translation": [0, 0.375, 0],
+        "origin": "corner"
+      }
+    },
+    "lower_body": {
+      "parent": "create_warehouse:block/forklift/lower_body",
+      "transform": {
+        "translation": [0, 0.5, 0],
+        "rotation": { "x": -45 },
+        "origin": "corner"
+      }
+    },
+    "upper_body": {
+      "parent": "create_warehouse:block/forklift/upper_body",
+      "transform": {
+        "translation": [0, 1.5165, 1.0165],
+        "rotation": { "x": 180 },
+        "origin": "corner"
+      }
+    },
+    "fork": {
+      "parent": "create_warehouse:block/forklift/fork",
+      "transform": {
+        "translation": [0, 1.5165, -0.796],
+        "rotation": { "x": 180 },
+        "origin": "corner"
+      }
+    }
+  }
+}

@@ -1,7 +1,16 @@
 {
   "creativetab.create_warehouse": "Create: Warehouse",
-
   "block.create_warehouse.drum_packager": "Drum Packager",
   "block.create_warehouse.crate_packager": "Crate Packager",
-  "block.create_warehouse.large_depot": "Large Depot"
+  "block.create_warehouse.crate_packager_structural": "Crate Packager Top",
+  "block.create_warehouse.large_depot": "Large Depot",
+  "block.create_warehouse.pallet": "Pallet",
+  "block.create_warehouse.pallet_depot": "Pallet Depot",
+  "block.create_warehouse.fluid_drum": "Fluid Drum",
+  "block.create_warehouse.item_elevator_bottom": "Item Elevator Bottom",
+  "block.create_warehouse.item_elevator_middle": "Item Elevator Middle",
+  "block.create_warehouse.item_elevator_top": "Item Elevator Top",
+  "block.create_warehouse.forklift": "Forklift",
+  "item.create_warehouse.crate_item": "Crate",
+  "entity.create_warehouse.crate": "Crate"
 }
