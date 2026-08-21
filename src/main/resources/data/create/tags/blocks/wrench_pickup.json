@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "values": [
+    "create_warehouse:drum_packager",
+    "create_warehouse:crate_packager",
+    "create_warehouse:large_depot"
+  ]
+}

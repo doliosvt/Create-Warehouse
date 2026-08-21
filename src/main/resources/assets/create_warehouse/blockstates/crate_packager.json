@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "linked=false,powered=false": {
+      "model": "create_warehouse:block/crate_packager_bottom"
+    },
+    "linked=false,powered=true": {
+      "model": "create_warehouse:block/crate_packager_bottom_powered"
+    },
+    "linked=true": {
+      "model": "create_warehouse:block/crate_packager_bottom_linked"
+    }
+  }
+}
