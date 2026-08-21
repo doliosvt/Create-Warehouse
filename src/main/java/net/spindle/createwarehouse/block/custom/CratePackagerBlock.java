@@ -13,23 +13,15 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.*;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.*;
 import net.minecraft.world.level.material.FluidState;
-import net.spindle.createwarehouse.block.ModBlockEntities;
 import net.spindle.createwarehouse.block.ModBlocks;
+import net.spindle.createwarehouse.block.ModBlockEntities;
 
 import java.util.function.BiConsumer;
-
-import static net.spindle.createwarehouse.block.custom.MultiBlock2X1X2BaseBlock.DIRECTION;
 
 public class CratePackagerBlock extends PackagerBlock {
     public CratePackagerBlock(Properties properties) {
         super(properties);
-    }
-
-    @Override
-    public Class getBlockEntityClass() {
-        return CratePackagerBlockEntity.class;
     }
 
     @Override
@@ -41,13 +33,10 @@ public class CratePackagerBlock extends PackagerBlock {
     public BlockState getStateForPlacement(BlockPlaceContext context) {
         BlockPos blockPos = context.getClickedPos();
         Level level = context.getLevel();
-        if (blockPos.getY() < level.getMaxBuildHeight() - 1 && level.getBlockState(blockPos.above()).canBeReplaced(context)) {
-           return this.defaultBlockState().setValue(FACING, Direction.UP);
-        } else if (blockPos.getY() > level.getMinBuildHeight() && level.getBlockState(blockPos.below()).canBeReplaced(context)) {
-            return ModBlocks.CRATE_PACKAGER_STRUCTURAL.getDefaultState();
-        } else {
+        if (blockPos.getY() >= level.getMaxBuildHeight() - 1
+                || !level.getBlockState(blockPos.above()).canBeReplaced(context))
             return null;
-        }
+        return defaultBlockState().setValue(FACING, Direction.UP);
     }
 
     @Override
@@ -55,12 +44,6 @@ public class CratePackagerBlock extends PackagerBlock {
         super.setPlacedBy(level, pos, state, placer, stack);
         level.setBlock(pos.above(), ModBlocks.CRATE_PACKAGER_STRUCTURAL.getDefaultState(), 3);
     }
-
-    // Does not work
-    //@Override
-    //public BlockState getRotatedBlockState(BlockState originalState, Direction targetedFace) {
-    //    return originalState.setValue(FACING, Direction.SOUTH);
-    //}
 
     @Override
     public InteractionResult onSneakWrenched(BlockState state, UseOnContext context) {
@@ -88,11 +71,18 @@ public class CratePackagerBlock extends PackagerBlock {
         return super.playerWillDestroy(level, pos, state, player);
     }
 
+    @Override
+    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean moving) {
+        if (!state.is(newState.getBlock()))
+            removeStructuralBlock(level, pos);
+        super.onRemove(state, level, pos, newState, moving);
+    }
+
     protected static boolean validate(LevelAccessor level, BlockPos currentPos) {
         if (level.getBlockState(currentPos.above()).is(ModBlocks.CRATE_PACKAGER_STRUCTURAL)) {
-            return Boolean.TRUE;
+            return true;
         }
-        return Boolean.FALSE;
+        return false;
     }
 
     protected static void removeStructuralBlock(LevelAccessor level, BlockPos pos) {

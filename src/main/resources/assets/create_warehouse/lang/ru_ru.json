@@ -1,0 +1,16 @@
+{
+  "creativetab.create_warehouse": "Create: Склад",
+  "block.create_warehouse.drum_packager": "Упаковщик бочек",
+  "block.create_warehouse.crate_packager": "Упаковщик ящиков",
+  "block.create_warehouse.crate_packager_structural": "Верх упаковщика ящиков",
+  "block.create_warehouse.large_depot": "Большое депо",
+  "block.create_warehouse.pallet": "Поддон",
+  "block.create_warehouse.pallet_depot": "Паллетное депо",
+  "block.create_warehouse.fluid_drum": "Бочка для жидкости",
+  "block.create_warehouse.item_elevator_bottom": "Низ предметного элеватора",
+  "block.create_warehouse.item_elevator_middle": "Секция предметного элеватора",
+  "block.create_warehouse.item_elevator_top": "Верх предметного элеватора",
+  "block.create_warehouse.forklift": "Погрузчик",
+  "item.create_warehouse.crate_item": "Ящик",
+  "entity.create_warehouse.crate": "Ящик"
+}

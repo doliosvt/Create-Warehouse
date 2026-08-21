@@ -1,26 +1,52 @@
-# eclipse
-bin
-*.launch
-.settings
-.metadata
-.classpath
-.project
+# Gradle / Java
+.gradle/
+build/
+out/
+bin/
+*.class
 
-# idea
-out
+# Minecraft / NeoForge development runs
+run/
+runs/
+run-data/
+logs/
+crash-reports/
+repo/
+
+# IntelliJ IDEA
+.idea/
+*.iml
 *.ipr
 *.iws
-*.iml
-.idea
 
-# gradle
-build
-.gradle
+# Eclipse
+.classpath
+.project
+.settings/
+.metadata/
+*.launch
+eclipse/
 
-# other
-eclipse
-run
-runs
-run-data
+# Visual Studio Code
+.vscode/
 
-repo
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs, temporary files and archives
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+hs_err_pid*
+replay_pid*
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini

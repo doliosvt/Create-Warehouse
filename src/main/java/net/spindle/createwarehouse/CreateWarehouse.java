@@ -1,103 +1,48 @@
 package net.spindle.createwarehouse;
 
 import com.simibubi.create.foundation.data.CreateRegistrate;
+import com.simibubi.create.AllPartialModels;
+import dev.engine_room.flywheel.lib.model.baked.PartialModel;
 import net.spindle.createwarehouse.block.ModBlockEntities;
 import net.spindle.createwarehouse.block.ModBlocks;
 import net.spindle.createwarehouse.entity.ModEntityTypes;
 import net.spindle.createwarehouse.item.ModCreativeModeTabs;
 import net.spindle.createwarehouse.item.ModItems;
-import org.slf4j.Logger;
-
-import com.mojang.logging.LogUtils;
-
-import net.minecraft.client.Minecraft;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.network.chat.Component;
-import net.minecraft.world.food.FoodProperties;
-import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.CreativeModeTab;
-import net.minecraft.world.item.CreativeModeTabs;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockBehaviour;
-import net.minecraft.world.level.material.MapColor;
-import net.neoforged.api.distmarker.Dist;
+import net.spindle.createwarehouse.item.custom.CrateStyles;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.IEventBus;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
-import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
-import net.neoforged.neoforge.event.server.ServerStartingEvent;
-import net.neoforged.neoforge.registries.DeferredBlock;
-import net.neoforged.neoforge.registries.DeferredHolder;
-import net.neoforged.neoforge.registries.DeferredItem;
-import net.neoforged.neoforge.registries.DeferredRegister;
 
-// The value here should match an entry in the META-INF/neoforge.mods.toml file
 @Mod(CreateWarehouse.MODID)
-public class CreateWarehouse
-{
-    // Define mod id in a common place for everything to reference
+public final class CreateWarehouse {
     public static final String MODID = "create_warehouse";
-    // Directly reference a slf4j logger
-    private static final Logger LOGGER = LogUtils.getLogger();
-
     public static final CreateRegistrate WAREHOUSE_REGISTRATE = CreateRegistrate.create(MODID);
-    // The constructor for the mod class is the first code that is run when your mod is loaded.
-    // FML will recognize some parameter types like IEventBus or ModContainer and pass them in automatically.
-    public CreateWarehouse(IEventBus modEventBus, ModContainer modContainer) {
-        // Register the commonSetup method for modloading
-//        modEventBus.addListener(this::commonSetup);
+
+    public CreateWarehouse(IEventBus modEventBus) {
         WAREHOUSE_REGISTRATE.registerEventListeners(modEventBus);
-
-        // Register ourselves for server and other game events we are interested in.
-        // Note that this is necessary if and only if we want *this* class (ExampleMod) to respond directly to events.
-        // Do not add this line if there are no @SubscribeEvent-annotated functions in this class, like onServerStarting() below.
-        NeoForge.EVENT_BUS.register(this);
-
         ModCreativeModeTabs.register(modEventBus);
-
-        ModItems.register();
+        WAREHOUSE_REGISTRATE.defaultCreativeTab(ModCreativeModeTabs.BASE_CREATIVE_TAB.getKey());
+        ModItems.register(modEventBus);
         ModBlocks.register();
         ModBlockEntities.register();
         ModEntityTypes.register();
-
-        // Register the item to a creative tab
-        modEventBus.addListener(this::addCreative);
-
-        // Register our mod's ModConfigSpec so that FML can create and load the config file for us
-        modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
+        modEventBus.addListener(ModBlockEntities::registerCapabilities);
+        modEventBus.addListener(ModEntityTypes::registerEntityAttributes);
+        modEventBus.addListener(ClientModEvents::onClientSetup);
     }
 
-    private void commonSetup(final FMLCommonSetupEvent event) {
-
-    }
-
-    // Add the example block item to the building blocks tab
-    private void addCreative(BuildCreativeModeTabContentsEvent event) {
-
-    }
-
-    // You can use SubscribeEvent and let the Event Bus discover methods to call
-    @SubscribeEvent
-    public void onServerStarting(ServerStartingEvent event) {
-
-    }
-
-    // You can use EventBusSubscriber to automatically register all static methods in the class annotated with @SubscribeEvent
-    @EventBusSubscriber(modid = MODID, value = Dist.CLIENT)
     public static class ClientModEvents {
-        @SubscribeEvent
         public static void onClientSetup(FMLClientSetupEvent event) {
-
+            event.enqueueWork(() -> {
+                PartialModel crateModel = PartialModel.of(
+                        ResourceLocation.fromNamespaceAndPath(MODID, "item/crate_item"));
+                AllPartialModels.PACKAGES.put(ModItems.CRATE_ITEM.getId(), crateModel);
+                AllPartialModels.PACKAGES_TO_HIDE_AS.add(crateModel);
+                AllPartialModels.PACKAGE_RIGGING.put(
+                        ModItems.CRATE_ITEM.getId(),
+                        PartialModel.of(CrateStyles.DEFAULT.getRiggingModel()));
+            });
         }
     }
 }
-// bus = Bus.MOD  | was in eventbussubscriber, see if it breaks something

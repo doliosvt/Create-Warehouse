@@ -1,0 +1,15 @@
+{
+  "replace": false,
+  "values": [
+    "create_warehouse:drum_packager",
+    "create_warehouse:crate_packager",
+    "create_warehouse:large_depot",
+    "create_warehouse:pallet",
+    "create_warehouse:pallet_depot",
+    "create_warehouse:fluid_drum",
+    "create_warehouse:item_elevator_bottom",
+    "create_warehouse:item_elevator_middle",
+    "create_warehouse:item_elevator_top",
+    "create_warehouse:forklift"
+  ]
+}

@@ -1,16 +1,5 @@
 {
   "variants": {
-    "facing=east": {
-      "model": "create_warehouse:block/large_depot_c"
-    },
-    "facing=south": {
-      "model": "create_warehouse:block/large_depot_d"
-    },
-    "facing=west": {
-      "model": "create_warehouse:block/large_depot_b"
-    },
-    "facing=north": {
-      "model": "create_warehouse:block/large_depot_a"
-    }
+    "": { "model": "create_warehouse:block/large_depot" }
   }
 }

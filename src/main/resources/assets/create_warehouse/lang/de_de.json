@@ -1,7 +1,16 @@
 {
   "creativetab.create_warehouse": "Create: Warehouse",
-
-  "block.create_warehouse.drum_packager": "Fass Verpacker",
-  "block.create_warehouse.crate_packager": "Kisten Verpacker",
-  "block.create_warehouse.large_depot": "Großes Depot"
+  "block.create_warehouse.drum_packager": "Fassverpacker",
+  "block.create_warehouse.crate_packager": "Kistenverpacker",
+  "block.create_warehouse.crate_packager_structural": "Oberteil des Kistenverpackers",
+  "block.create_warehouse.large_depot": "Großes Depot",
+  "block.create_warehouse.pallet": "Palette",
+  "block.create_warehouse.pallet_depot": "Palettendepot",
+  "block.create_warehouse.fluid_drum": "Flüssigkeitsfass",
+  "block.create_warehouse.item_elevator_bottom": "Güteraufzug (unten)",
+  "block.create_warehouse.item_elevator_middle": "Güteraufzug (Mitte)",
+  "block.create_warehouse.item_elevator_top": "Güteraufzug (oben)",
+  "block.create_warehouse.forklift": "Gabelstapler",
+  "item.create_warehouse.crate_item": "Kiste",
+  "entity.create_warehouse.crate": "Kiste"
 }
