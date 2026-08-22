@@ -1,5 +1,6 @@
 {
   "variants": {
-    "": { "model": "create_warehouse:block/pallet/block" }
+    "supports=false": { "model": "create_warehouse:block/pallet/block" },
+    "supports=true": { "model": "create_warehouse:block/pallet/supported" }
   }
 }

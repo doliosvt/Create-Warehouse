@@ -5,6 +5,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.StringRepresentable;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
@@ -12,6 +14,7 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -20,8 +23,10 @@ import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.spindle.createwarehouse.block.ModBlocks;
 
 import java.util.function.BiConsumer;
 
@@ -59,7 +64,13 @@ public class MultiblockPartBlock extends Block implements IWrenchable {
     @Override
     protected VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos,
                                             CollisionContext context) {
-        return state.getValue(PART_SHAPE).shape;
+        PartShape partShape = state.getValue(PART_SHAPE);
+        if (partShape.isPallet()) {
+            BlockPos masterPos = getMasterPos(state, pos);
+            if (level.getBlockState(masterPos).is(ModBlocks.PALLET))
+                return PalletBlock.addCrateCollision(level, masterPos, pos, partShape.shape);
+        }
+        return partShape.shape;
     }
 
     public static BlockPos getMasterPos(BlockState state, BlockPos partPos) {
@@ -70,12 +81,45 @@ public class MultiblockPartBlock extends Block implements IWrenchable {
     }
 
     @Override
+    public ItemStack getCloneItemStack(LevelReader level, BlockPos pos, BlockState state) {
+        BlockPos masterPos = getMasterPos(state, pos);
+        BlockState masterState = level.getBlockState(masterPos);
+        if (!masterPos.equals(pos) && masterState.getBlock() instanceof MultiblockDecorationBlock)
+            return masterState.getBlock().getCloneItemStack(level, masterPos, masterState);
+        return super.getCloneItemStack(level, pos, state);
+    }
+
+    @Override
     public InteractionResult onSneakWrenched(BlockState state, UseOnContext context) {
         Player player = context.getPlayer();
         if (!context.getLevel().isClientSide())
             destroyMaster(context.getLevel(), context.getClickedPos(), state,
                     player == null || !player.isCreative(), player);
         return InteractionResult.SUCCESS;
+    }
+
+    @Override
+    protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
+                                              Player player, InteractionHand hand,
+                                              net.minecraft.world.phys.BlockHitResult hitResult) {
+        BlockPos masterPos = getMasterPos(state, pos);
+        BlockState masterState = level.getBlockState(masterPos);
+        if (masterState.is(ModBlocks.PALLET))
+            return PalletBlock.tryUseItem(stack, masterState, level, masterPos, player);
+        if (masterState.is(ModBlocks.DRUM_PACKAGER)
+                && DrumPackagerBlock.tryTakeOutput(level, masterPos, player))
+            return ItemInteractionResult.sidedSuccess(level.isClientSide);
+        return super.useItemOn(stack, state, level, pos, player, hand, hitResult);
+    }
+
+    @Override
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
+                                               Player player, BlockHitResult hitResult) {
+        BlockPos masterPos = getMasterPos(state, pos);
+        if (level.getBlockState(masterPos).is(ModBlocks.DRUM_PACKAGER)
+                && DrumPackagerBlock.tryTakeOutput(level, masterPos, player))
+            return InteractionResult.sidedSuccess(level.isClientSide);
+        return super.useWithoutItem(state, level, pos, player, hitResult);
     }
 
     @Override
@@ -108,6 +152,17 @@ public class MultiblockPartBlock extends Block implements IWrenchable {
         return super.updateShape(state, direction, neighborState, level, pos, neighborPos);
     }
 
+    @Override
+    public void neighborChanged(BlockState state, Level level, BlockPos pos, Block neighborBlock,
+                                BlockPos neighborPos, boolean movedByPiston) {
+        if (!level.isClientSide) {
+            BlockPos masterPos = getMasterPos(state, pos);
+            if (level.getBlockState(masterPos).is(ModBlocks.DRUM_PACKAGER))
+                DrumPackagerBlock.updatePower(level, masterPos);
+        }
+        super.neighborChanged(state, level, pos, neighborBlock, neighborPos, movedByPiston);
+    }
+
     private static void destroyMaster(Level level, BlockPos partPos, BlockState state,
                                       boolean drop, Player player) {
         BlockPos masterPos = getMasterPos(state, partPos);
@@ -118,6 +173,10 @@ public class MultiblockPartBlock extends Block implements IWrenchable {
     public enum PartShape implements StringRepresentable {
         FULL("full", Block.box(0, 0, 0, 16, 16, 16)),
         LOW("low", Block.box(0, 0, 0, 16, 13, 16)),
+        PALLET("pallet", Block.box(0, 0, 0, 16, 4, 16)),
+        PALLET_FRAME_BOTTOM("pallet_frame_bottom", Block.box(0, 0, 0, 16, 4, 16)),
+        PALLET_FRAME_TOP("pallet_frame_top", Block.box(0, 13, 0, 16, 16, 16)),
+        PALLET_CRATES_TOP("pallet_crates_top", Shapes.empty()),
         FORKLIFT_BASE("forklift_base", Block.box(0, 0, 0, 16, 6, 16)),
         FORKLIFT_BASE_ARM_LEFT("forklift_base_arm_left", Shapes.or(
                 Block.box(0, 0, 0, 16, 6, 16),
@@ -135,6 +194,15 @@ public class MultiblockPartBlock extends Block implements IWrenchable {
         PartShape(String serializedName, VoxelShape shape) {
             this.serializedName = serializedName;
             this.shape = shape;
+        }
+
+        public VoxelShape getShape() {
+            return shape;
+        }
+
+        public boolean isPallet() {
+            return this == PALLET || this == PALLET_FRAME_BOTTOM
+                    || this == PALLET_FRAME_TOP || this == PALLET_CRATES_TOP;
         }
 
         @Override
