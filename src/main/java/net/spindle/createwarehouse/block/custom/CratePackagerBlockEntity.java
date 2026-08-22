@@ -24,8 +24,10 @@ public class CratePackagerBlockEntity extends PackagerBlockEntity {
 
         super.attemptToSend(queuedRequests);
 
-        if (heldSlotWasEmpty && !heldBox.isEmpty())
+        if (heldSlotWasEmpty && !heldBox.isEmpty() && !CrateItem.isCrate(heldBox)) {
             heldBox = asCrate(heldBox);
+            notifyUpdate();
+        }
 
         for (int index = previousQueueSize; index < queuedExitingPackages.size(); index++) {
             BigItemStack queued = queuedExitingPackages.get(index);
