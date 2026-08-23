@@ -1,0 +1,7 @@
+{
+  "parent": "create_warehouse:block/drum_packager",
+  "textures": {
+    "0": "create_warehouse:block/drum_packager_powered",
+    "particle": "create_warehouse:block/drum_packager_powered"
+  }
+}

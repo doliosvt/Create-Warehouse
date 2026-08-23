@@ -62,6 +62,37 @@ public class PalletBlockEntity extends SmartBlockEntity {
         return crates.get(slot);
     }
 
+    public CompoundTag saveForTransport(HolderLookup.Provider registries) {
+        CompoundTag tag = new CompoundTag();
+        ContainerHelper.saveAllItems(tag, crates, registries);
+        return tag;
+    }
+
+    public void loadFromTransport(CompoundTag tag, HolderLookup.Provider registries) {
+        crates.clear();
+        ContainerHelper.loadAllItems(tag, crates, registries);
+        if (level != null && !level.isClientSide) {
+            for (int slot = 0; slot < crates.size(); slot++) {
+                ItemStack cargo = crates.get(slot);
+                if (!cargo.isEmpty())
+                    PalletBlock.prepareCrateSlot(level, worldPosition, slot, cargo);
+            }
+        }
+        notifyUpdate();
+    }
+
+    public static NonNullList<ItemStack> readTransportedCargo(CompoundTag tag,
+                                                              HolderLookup.Provider registries) {
+        NonNullList<ItemStack> cargo = NonNullList.withSize(CAPACITY, ItemStack.EMPTY);
+        ContainerHelper.loadAllItems(tag, cargo, registries);
+        return cargo;
+    }
+
+    public void clearForTransport() {
+        crates.clear();
+        setChanged();
+    }
+
     @Override
     protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
         super.write(tag, registries, clientPacket);

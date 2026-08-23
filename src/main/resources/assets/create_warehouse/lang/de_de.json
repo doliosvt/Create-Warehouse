@@ -12,5 +12,14 @@
   "block.create_warehouse.item_elevator_top": "Güteraufzug (oben)",
   "block.create_warehouse.forklift": "Gabelstapler",
   "item.create_warehouse.crate_item": "Kiste",
-  "entity.create_warehouse.crate": "Kiste"
+  "entity.create_warehouse.crate": "Kiste",
+  "entity.create_warehouse.carried_pallet": "Getragene Palette",
+  "message.create_warehouse.forklift.select_pallet": "Wähle nun die oberste aufzunehmende Palette",
+  "message.create_warehouse.forklift.select_depot": "Wähle nun das Palettendepot",
+  "message.create_warehouse.forklift.configured": "Gabelstaplerroute konfiguriert",
+  "message.create_warehouse.forklift.invalid_configuration": "Wähle vor dem Platzieren eine Abhol- und eine Ablagestelle",
+  "message.create_warehouse.forklift.too_far": "Die Auswahl darf höchstens %s Blöcke entfernt sein",
+  "message.create_warehouse.forklift.pallet_must_be_top": "Nur die oberste Palette kann ausgewählt werden",
+  "message.create_warehouse.forklift.invalid_pallet": "Wähle eine Palette",
+  "message.create_warehouse.forklift.invalid_depot": "Wähle ein Palettendepot"
 }

@@ -2,6 +2,7 @@ package net.spindle.createwarehouse.block.custom;
 
 import com.simibubi.create.foundation.block.IBE;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.LivingEntity;
@@ -10,6 +11,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
@@ -237,6 +239,133 @@ public class PalletBlock extends MultiblockDecorationBlock implements IBE<Pallet
 
     public static boolean isPalletCargo(ItemStack stack) {
         return CrateItem.isCrate(stack) || FluidDrumItem.isDrum(stack);
+    }
+
+    public static boolean canMove(Level level, BlockPos pos) {
+        return level.getBlockState(pos).is(ModBlocks.PALLET)
+                && !level.getBlockState(pos.above(2)).is(ModBlocks.PALLET)
+                && level.getBlockEntity(pos) instanceof PalletBlockEntity;
+    }
+
+    public static BlockPos findStackBase(Level level, BlockPos palletPos) {
+        BlockPos base = palletPos;
+        while (level.getBlockState(base.below(2)).is(ModBlocks.PALLET))
+            base = base.below(2);
+        return base;
+    }
+
+    @Nullable
+    public static BlockPos getTopPalletForForklift(Level level, BlockPos basePos) {
+        BlockPos top = null;
+        for (int layer = 0; layer < 3; layer++) {
+            BlockPos candidate = basePos.above(layer * 2);
+            if (!level.getBlockState(candidate).is(ModBlocks.PALLET))
+                break;
+            top = candidate;
+        }
+        if (level.getBlockState(basePos.above(6)).is(ModBlocks.PALLET))
+            return null;
+        return top;
+    }
+
+    @Nullable
+    public static BlockPos getForkliftStackDestination(Level level, BlockPos basePos) {
+        for (int layer = 0; layer < 3; layer++) {
+            BlockPos candidate = basePos.above(layer * 2);
+            if (level.getBlockState(candidate).is(ModBlocks.PALLET))
+                continue;
+            return canPlaceTransported(level, candidate) ? candidate : null;
+        }
+        return null;
+    }
+
+    public static CompoundTag removeForTransport(Level level, BlockPos pos) {
+        CompoundTag data = snapshotForTransport(level, pos);
+        if (data == null || !(level.getBlockEntity(pos) instanceof PalletBlockEntity pallet))
+            return null;
+
+        detachSupportsSilently(level, pos.below(2));
+        removeOwnedPartsSilently(level, pos);
+        pallet.clearForTransport();
+        level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        return data;
+    }
+
+    @Nullable
+    public static CompoundTag snapshotForTransport(Level level, BlockPos pos) {
+        if (!canMove(level, pos)
+                || !(level.getBlockEntity(pos) instanceof PalletBlockEntity pallet))
+            return null;
+        return pallet.saveForTransport(level.registryAccess());
+    }
+
+    private static void detachSupportsSilently(Level level, BlockPos lowerPos) {
+        BlockState lowerState = level.getBlockState(lowerPos);
+        if (!lowerState.is(ModBlocks.PALLET) || !lowerState.getValue(SUPPORTS))
+            return;
+
+        level.setBlock(lowerPos, lowerState.setValue(SUPPORTS, false), Block.UPDATE_ALL);
+        for (BlockPos offset : LOWER_PARTS) {
+            BlockPos partPos = lowerPos.offset(offset);
+            BlockState partState = level.getBlockState(partPos);
+            if (isOwnedPart(partState, partPos, lowerPos))
+                level.setBlock(partPos,
+                        partState.setValue(MultiblockPartBlock.PART_SHAPE,
+                                MultiblockPartBlock.PartShape.PALLET),
+                        Block.UPDATE_ALL);
+        }
+        for (BlockPos offset : UPPER_PARTS) {
+            BlockPos partPos = lowerPos.offset(offset);
+            BlockState partState = level.getBlockState(partPos);
+            if (isOwnedPart(partState, partPos, lowerPos))
+                level.setBlock(partPos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        }
+    }
+
+    private static void removeOwnedPartsSilently(Level level, BlockPos masterPos) {
+        for (BlockPos offset : LOWER_PARTS) {
+            BlockPos partPos = masterPos.offset(offset);
+            BlockState partState = level.getBlockState(partPos);
+            if (isOwnedPart(partState, partPos, masterPos))
+                level.setBlock(partPos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        }
+        for (BlockPos offset : UPPER_PARTS) {
+            BlockPos partPos = masterPos.offset(offset);
+            BlockState partState = level.getBlockState(partPos);
+            if (isOwnedPart(partState, partPos, masterPos))
+                level.setBlock(partPos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        }
+    }
+
+    public static boolean canPlaceTransported(Level level, BlockPos pos) {
+        BlockPos[] occupiedCells = {
+                BlockPos.ZERO, new BlockPos(-1, 0, 0), new BlockPos(0, 0, 1), new BlockPos(-1, 0, 1),
+                new BlockPos(0, 1, 0), new BlockPos(-1, 1, 0),
+                new BlockPos(0, 1, 1), new BlockPos(-1, 1, 1)
+        };
+        for (BlockPos offset : occupiedCells) {
+            BlockPos occupiedPos = pos.offset(offset);
+            if (!level.isInWorldBounds(occupiedPos)
+                    || !level.getBlockState(occupiedPos).canBeReplaced())
+                return false;
+        }
+        return true;
+    }
+
+    public static boolean placeTransported(Level level, BlockPos pos, CompoundTag data) {
+        if (!canPlaceTransported(level, pos))
+            return false;
+
+        BlockState state = ModBlocks.PALLET.getDefaultState();
+        if (!level.setBlock(pos, state, Block.UPDATE_ALL))
+            return false;
+        ModBlocks.PALLET.get().setPlacedBy(level, pos, state, null, ModBlocks.PALLET.asStack());
+        if (!(level.getBlockEntity(pos) instanceof PalletBlockEntity pallet)) {
+            level.destroyBlock(pos, false);
+            return false;
+        }
+        pallet.loadFromTransport(data, level.registryAccess());
+        return true;
     }
 
     private static ItemInteractionResult tryAddUpperPallet(ItemStack stack, BlockState state, Level level,

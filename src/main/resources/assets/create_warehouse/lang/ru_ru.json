@@ -12,5 +12,14 @@
   "block.create_warehouse.item_elevator_top": "Верх предметного элеватора",
   "block.create_warehouse.forklift": "Погрузчик",
   "item.create_warehouse.crate_item": "Ящик",
-  "entity.create_warehouse.crate": "Ящик"
+  "entity.create_warehouse.crate": "Ящик",
+  "entity.create_warehouse.carried_pallet": "Переносимая паллета",
+  "message.create_warehouse.forklift.select_pallet": "Теперь выберите верхнюю паллету для захвата",
+  "message.create_warehouse.forklift.select_depot": "Теперь выберите паллетное депо",
+  "message.create_warehouse.forklift.configured": "Маршрут погрузчика настроен",
+  "message.create_warehouse.forklift.invalid_configuration": "Перед установкой погрузчика выберите одну точку забора и одну точку размещения",
+  "message.create_warehouse.forklift.too_far": "Точка должна быть не дальше %s блоков от погрузчика",
+  "message.create_warehouse.forklift.pallet_must_be_top": "Можно выбрать только верхнюю паллету в стопке",
+  "message.create_warehouse.forklift.invalid_pallet": "Выберите паллету",
+  "message.create_warehouse.forklift.invalid_depot": "Выберите паллетное депо"
 }

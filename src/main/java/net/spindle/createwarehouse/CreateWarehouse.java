@@ -11,6 +11,7 @@ import net.spindle.createwarehouse.item.ModCreativeModeTabs;
 import net.spindle.createwarehouse.item.ModDataComponents;
 import net.spindle.createwarehouse.item.ModItems;
 import net.spindle.createwarehouse.item.custom.CrateStyles;
+import net.spindle.createwarehouse.client.ModPartialModels;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
@@ -38,6 +39,7 @@ public final class CreateWarehouse {
 
     public static class ClientModEvents {
         public static void onClientSetup(FMLClientSetupEvent event) {
+            ModPartialModels.init();
             event.enqueueWork(() -> {
                 PartialModel crateModel = PartialModel.of(
                         ResourceLocation.fromNamespaceAndPath(MODID, "item/crate_item"));

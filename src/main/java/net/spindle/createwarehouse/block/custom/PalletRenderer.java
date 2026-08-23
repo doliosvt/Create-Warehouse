@@ -15,6 +15,8 @@ import net.spindle.createwarehouse.CreateWarehouse;
 import net.spindle.createwarehouse.block.ModBlocks;
 import net.spindle.createwarehouse.item.custom.FluidDrumItem;
 
+import java.util.function.IntFunction;
+
 public class PalletRenderer extends SafeBlockEntityRenderer<PalletBlockEntity> {
     private static final PartialModel CRATE = PartialModel.of(
             ResourceLocation.fromNamespaceAndPath(CreateWarehouse.MODID, "item/crate_item"));
@@ -29,8 +31,13 @@ public class PalletRenderer extends SafeBlockEntityRenderer<PalletBlockEntity> {
     @Override
     protected void renderSafe(PalletBlockEntity pallet, float partialTicks, PoseStack poseStack,
                               MultiBufferSource buffer, int light, int overlay) {
+        renderCargo(pallet::getCrate, poseStack, buffer, light, overlay);
+    }
+
+    public static void renderCargo(IntFunction<net.minecraft.world.item.ItemStack> cargoGetter,
+                                   PoseStack poseStack, MultiBufferSource buffer, int light, int overlay) {
         for (int slot = 0; slot < PalletBlockEntity.CAPACITY; slot++) {
-            var cargo = pallet.getCrate(slot);
+            var cargo = cargoGetter.apply(slot);
             if (cargo.isEmpty())
                 continue;
 
