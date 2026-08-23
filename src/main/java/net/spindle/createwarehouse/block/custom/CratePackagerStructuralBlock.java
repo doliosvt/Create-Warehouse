@@ -11,6 +11,7 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -30,6 +31,15 @@ public class CratePackagerStructuralBlock extends Block implements IWrenchable {
     @Override
     protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
         return Block.box(0, 0, 0, 16, 5, 16);
+    }
+
+    @Override
+    public ItemStack getCloneItemStack(LevelReader level, BlockPos pos, BlockState state) {
+        BlockPos masterPos = pos.below();
+        BlockState masterState = level.getBlockState(masterPos);
+        if (masterState.is(ModBlocks.CRATE_PACKAGER))
+            return masterState.getBlock().getCloneItemStack(level, masterPos, masterState);
+        return super.getCloneItemStack(level, pos, state);
     }
 
     @Override
