@@ -8,13 +8,14 @@ import net.minecraft.world.level.material.MapColor;
 import net.spindle.createwarehouse.block.custom.CratePackagerBlock;
 import net.spindle.createwarehouse.block.custom.CratePackagerStructuralBlock;
 import net.spindle.createwarehouse.block.custom.DrumPackagerBlock;
+import net.spindle.createwarehouse.block.custom.ForkliftBlock;
 import net.spindle.createwarehouse.block.custom.MultiblockDecorationBlock;
 import net.spindle.createwarehouse.block.custom.MultiblockPartBlock;
 import net.spindle.createwarehouse.block.custom.PalletBlock;
 import net.spindle.createwarehouse.block.custom.StaticShapeBlock;
 import net.spindle.createwarehouse.item.custom.FluidDrumItem;
+import net.spindle.createwarehouse.item.custom.ForkliftItem;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import net.minecraft.world.phys.shapes.Shapes;
 
 import static net.spindle.createwarehouse.CreateWarehouse.WAREHOUSE_REGISTRATE;
 import static net.spindle.createwarehouse.block.custom.MultiblockDecorationBlock.PartPlacement.at;
@@ -101,23 +102,31 @@ public final class ModBlocks {
             "item_elevator_middle", Block.box(0, 0, 0, 16, 16, 16));
     public static final BlockEntry<StaticShapeBlock> ITEM_ELEVATOR_TOP = metalDecoration(
             "item_elevator_top", Block.box(0, 0, 0, 16, 16, 16));
-    public static final BlockEntry<MultiblockDecorationBlock> FORKLIFT = metalMultiblock(
-            "forklift", Shapes.or(
+    public static final BlockEntry<ForkliftBlock> FORKLIFT = WAREHOUSE_REGISTRATE
+            .block("forklift", properties -> new ForkliftBlock(properties,
                     Block.box(0, 0, 0, 16, 6, 16),
-                    Block.box(0, 6, 0, 4, 16, 16)),
-            at(-1, 0, -1, MultiblockPartBlock.PartShape.FORKLIFT_BASE),
-            at(0, 0, -1, MultiblockPartBlock.PartShape.FORKLIFT_BASE),
-            at(-1, 0, 0, MultiblockPartBlock.PartShape.FORKLIFT_BASE_ARM_LEFT),
-            at(-1, 1, 1, MultiblockPartBlock.PartShape.FORKLIFT_ARM_LEFT),
-            at(0, 1, 1, MultiblockPartBlock.PartShape.FORKLIFT_ARM_RIGHT),
-            at(-1, 1, 0, MultiblockPartBlock.PartShape.FORKLIFT_TOP_LEFT),
-            at(0, 1, 0, MultiblockPartBlock.PartShape.FORKLIFT_TOP_RIGHT),
-            at(-1, 1, -1, MultiblockPartBlock.PartShape.FORKLIFT_TOP_LEFT),
-            at(0, 1, -1, MultiblockPartBlock.PartShape.FORKLIFT_TOP_RIGHT),
-            at(-1, 1, -2, MultiblockPartBlock.PartShape.FORKLIFT_TOP_LEFT),
-            at(0, 1, -2, MultiblockPartBlock.PartShape.FORKLIFT_TOP_RIGHT),
-            at(-1, 1, -3, MultiblockPartBlock.PartShape.FORKLIFT_TIP_LEFT),
-            at(0, 1, -3, MultiblockPartBlock.PartShape.FORKLIFT_TIP_RIGHT));
+                    at(-1, 0, -1, MultiblockPartBlock.PartShape.FORKLIFT_BASE),
+                    at(0, 0, -1, MultiblockPartBlock.PartShape.FORKLIFT_BASE),
+                    at(-1, 0, 0, MultiblockPartBlock.PartShape.FORKLIFT_BASE_ARM_LEFT),
+                    at(-1, 1, 1, MultiblockPartBlock.PartShape.FORKLIFT_ARM_LEFT),
+                    at(0, 1, 1, MultiblockPartBlock.PartShape.FORKLIFT_ARM_RIGHT),
+                    at(-1, 1, 0, MultiblockPartBlock.PartShape.FORKLIFT_TOP_LEFT),
+                    at(0, 1, 0, MultiblockPartBlock.PartShape.FORKLIFT_TOP_RIGHT),
+                    at(-1, 1, -1, MultiblockPartBlock.PartShape.FORKLIFT_TOP_LEFT),
+                    at(0, 1, -1, MultiblockPartBlock.PartShape.FORKLIFT_TOP_RIGHT),
+                    at(-1, 1, -2, MultiblockPartBlock.PartShape.FORKLIFT_TOP_LEFT),
+                    at(0, 1, -2, MultiblockPartBlock.PartShape.FORKLIFT_TOP_RIGHT),
+                    at(-1, 1, -3, MultiblockPartBlock.PartShape.FORKLIFT_TIP_LEFT),
+                    at(0, 1, -3, MultiblockPartBlock.PartShape.FORKLIFT_TIP_RIGHT)))
+            .initialProperties(SharedProperties::stone)
+            .properties(properties -> properties
+                    .mapColor(MapColor.COLOR_GRAY)
+                    .sound(SoundType.NETHERITE_BLOCK)
+                    .strength(3f)
+                    .noOcclusion())
+            .item(ForkliftItem::new)
+            .build()
+            .register();
 
     private ModBlocks() {}
 

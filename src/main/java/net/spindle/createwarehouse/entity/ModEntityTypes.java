@@ -17,6 +17,8 @@ import net.spindle.createwarehouse.CreateWarehouse;
 import net.spindle.createwarehouse.entity.custom.CrateEntity;
 import net.spindle.createwarehouse.entity.custom.CrateRenderer;
 import net.spindle.createwarehouse.entity.custom.CrateVisual;
+import net.spindle.createwarehouse.entity.custom.CarriedPalletEntity;
+import net.spindle.createwarehouse.entity.custom.CarriedPalletRenderer;
 
 public final class ModEntityTypes {
 
@@ -24,6 +26,12 @@ public final class ModEntityTypes {
             MobCategory.MISC, 10, 3, true, false, CrateEntity::configureDimensions)
             .visual(() -> CrateVisual::new, true)
             .register();
+
+    public static final EntityEntry<CarriedPalletEntity> CARRIED_PALLET =
+            ModEntityTypes.<CarriedPalletEntity>register(
+                    "carried_pallet", CarriedPalletEntity::new, () -> CarriedPalletRenderer::new,
+                    MobCategory.MISC, 10, 1, false, false, CarriedPalletEntity::configureDimensions)
+                    .register();
 
     @SuppressWarnings("unchecked")
     private static <T extends Entity> CreateEntityBuilder<T, ?> register(String name, EntityType.EntityFactory<T> factory,

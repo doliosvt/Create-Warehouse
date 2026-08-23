@@ -10,6 +10,8 @@ import net.spindle.createwarehouse.block.custom.CratePackagerBlockEntity;
 import net.spindle.createwarehouse.block.custom.CratePackagerRenderer;
 import net.spindle.createwarehouse.block.custom.DrumPackagerBlockEntity;
 import net.spindle.createwarehouse.block.custom.DrumPackagerRenderer;
+import net.spindle.createwarehouse.block.custom.ForkliftBlockEntity;
+import net.spindle.createwarehouse.block.custom.ForkliftRenderer;
 import net.spindle.createwarehouse.block.custom.MultiblockPartBlock;
 import net.spindle.createwarehouse.block.custom.PalletBlockEntity;
 import net.spindle.createwarehouse.block.custom.PalletRenderer;
@@ -35,6 +37,12 @@ public final class ModBlockEntities {
             .blockEntity("pallet", PalletBlockEntity::new)
             .validBlocks(ModBlocks.PALLET)
             .renderer(() -> PalletRenderer::new)
+            .register();
+
+    public static final BlockEntityEntry<ForkliftBlockEntity> FORKLIFT = WAREHOUSE_REGISTRATE
+            .blockEntity("forklift", ForkliftBlockEntity::new)
+            .validBlocks(ModBlocks.FORKLIFT)
+            .renderer(() -> ForkliftRenderer::new)
             .register();
 
     private ModBlockEntities() {}

@@ -1,6 +1,6 @@
 {
   "variants": {
     "powered=false": { "model": "create_warehouse:block/drum_packager" },
-    "powered=true": { "model": "create_warehouse:block/drum_packager" }
+    "powered=true": { "model": "create_warehouse:block/drum_packager_powered" }
   }
 }

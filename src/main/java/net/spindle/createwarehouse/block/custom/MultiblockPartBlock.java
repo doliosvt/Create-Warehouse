@@ -70,7 +70,7 @@ public class MultiblockPartBlock extends Block implements IWrenchable {
             if (level.getBlockState(masterPos).is(ModBlocks.PALLET))
                 return PalletBlock.addCrateCollision(level, masterPos, pos, partShape.shape);
         }
-        return partShape.shape;
+        return partShape.getCollisionShape();
     }
 
     public static BlockPos getMasterPos(BlockState state, BlockPos partPos) {
@@ -198,6 +198,16 @@ public class MultiblockPartBlock extends Block implements IWrenchable {
 
         public VoxelShape getShape() {
             return shape;
+        }
+
+        public VoxelShape getCollisionShape() {
+            return switch (this) {
+                case FORKLIFT_BASE, FORKLIFT_BASE_ARM_LEFT -> Block.box(0, 0, 0, 16, 6, 16);
+                case FORKLIFT_ARM_LEFT, FORKLIFT_ARM_RIGHT,
+                     FORKLIFT_TOP_LEFT, FORKLIFT_TOP_RIGHT,
+                     FORKLIFT_TIP_LEFT, FORKLIFT_TIP_RIGHT -> Shapes.empty();
+                default -> shape;
+            };
         }
 
         public boolean isPallet() {

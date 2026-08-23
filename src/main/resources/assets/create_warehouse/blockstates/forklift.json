@@ -1,5 +1,5 @@
 {
   "variants": {
-    "": { "model": "create_warehouse:block/forklift/assembled" }
+    "": { "model": "create_warehouse:block/forklift/static" }
   }
 }

@@ -1,0 +1,11 @@
+{
+  "loader": "neoforge:composite",
+  "textures": {
+    "particle": "create_warehouse:block/forklift_a"
+  },
+  "children": {
+    "block": {
+      "parent": "create_warehouse:block/forklift/block"
+    }
+  }
+}

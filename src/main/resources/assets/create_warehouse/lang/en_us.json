@@ -12,5 +12,14 @@
   "block.create_warehouse.item_elevator_top": "Item Elevator Top",
   "block.create_warehouse.forklift": "Forklift",
   "item.create_warehouse.crate_item": "Crate",
-  "entity.create_warehouse.crate": "Crate"
+  "entity.create_warehouse.crate": "Crate",
+  "entity.create_warehouse.carried_pallet": "Carried Pallet",
+  "message.create_warehouse.forklift.select_pallet": "Now select the top pallet to pick up",
+  "message.create_warehouse.forklift.select_depot": "Now select the pallet depot",
+  "message.create_warehouse.forklift.configured": "Forklift route configured",
+  "message.create_warehouse.forklift.invalid_configuration": "Select one pickup point and one placement point before placing the forklift",
+  "message.create_warehouse.forklift.too_far": "Selection must be within %s blocks of the forklift",
+  "message.create_warehouse.forklift.pallet_must_be_top": "Only the top pallet in a stack can be selected",
+  "message.create_warehouse.forklift.invalid_pallet": "Select a pallet",
+  "message.create_warehouse.forklift.invalid_depot": "Select a pallet depot"
 }
