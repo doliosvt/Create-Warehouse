@@ -1,6 +1,7 @@
 package net.spindle.createwarehouse.block.custom;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
@@ -16,10 +17,90 @@ import java.util.List;
 
 public class MultiblockDecorationBlock extends StaticShapeBlock {
     private final List<PartPlacement> parts;
+    private final int minX;
+    private final int maxX;
+    private final int minZ;
+    private final int maxZ;
 
     public MultiblockDecorationBlock(Properties properties, VoxelShape shape, PartPlacement... parts) {
         super(properties, shape);
         this.parts = List.of(parts);
+        int minX = 0;
+        int maxX = 0;
+        int minZ = 0;
+        int maxZ = 0;
+        for (PartPlacement part : parts) {
+            BlockPos offset = part.offset();
+            minX = Math.min(minX, offset.getX());
+            maxX = Math.max(maxX, offset.getX());
+            minZ = Math.min(minZ, offset.getZ());
+            maxZ = Math.max(maxZ, offset.getZ());
+        }
+        this.minX = minX;
+        this.maxX = maxX;
+        this.minZ = minZ;
+        this.maxZ = maxZ;
+    }
+
+    @Nullable
+    public BlockPlaceContext findPlacementContext(BlockPlaceContext context) {
+        Direction preferredDirection = context.getHorizontalDirection();
+        Direction[] directions = {
+                preferredDirection,
+                preferredDirection.getCounterClockWise(),
+                preferredDirection.getOpposite(),
+                preferredDirection.getClockWise()
+        };
+
+        BlockPos clickedPos = context.getClickedPos();
+        for (Direction direction : directions) {
+            BlockPos masterPos = getMasterPosForCorner(clickedPos, direction);
+            BlockPlaceContext candidateContext = BlockPlaceContext.at(
+                    context, masterPos, context.getClickedFace());
+            if (hasRoom(candidateContext, masterPos))
+                return candidateContext;
+        }
+        return null;
+    }
+
+    private BlockPos getMasterPosForCorner(BlockPos clickedPos, Direction direction) {
+        int anchorX;
+        int anchorZ;
+        switch (direction) {
+            case NORTH -> {
+                anchorX = minX;
+                anchorZ = maxZ;
+            }
+            case EAST -> {
+                anchorX = minX;
+                anchorZ = minZ;
+            }
+            case SOUTH -> {
+                anchorX = maxX;
+                anchorZ = minZ;
+            }
+            case WEST -> {
+                anchorX = maxX;
+                anchorZ = maxZ;
+            }
+            default -> throw new IllegalArgumentException("Expected a horizontal direction");
+        }
+        return clickedPos.offset(-anchorX, 0, -anchorZ);
+    }
+
+    private boolean hasRoom(BlockPlaceContext context, BlockPos masterPos) {
+        Level level = context.getLevel();
+        if (!level.isInWorldBounds(masterPos)
+                || !level.getBlockState(masterPos).canBeReplaced(context))
+            return false;
+
+        for (PartPlacement part : parts) {
+            BlockPos partPos = masterPos.offset(part.offset());
+            if (!level.isInWorldBounds(partPos)
+                    || !level.getBlockState(partPos).canBeReplaced(context))
+                return false;
+        }
+        return true;
     }
 
     @Nullable
@@ -29,14 +110,8 @@ public class MultiblockDecorationBlock extends StaticShapeBlock {
         if (state == null)
             return null;
 
-        Level level = context.getLevel();
         BlockPos masterPos = context.getClickedPos();
-        for (PartPlacement part : parts) {
-            BlockPos partPos = masterPos.offset(part.offset());
-            if (!level.isInWorldBounds(partPos) || !level.getBlockState(partPos).canBeReplaced(context))
-                return null;
-        }
-        return state;
+        return hasRoom(context, masterPos) ? state : null;
     }
 
     @Override

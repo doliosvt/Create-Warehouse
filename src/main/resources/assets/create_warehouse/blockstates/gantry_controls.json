@@ -1,0 +1,8 @@
+{
+  "multipart": [
+    { "when": { "facing": "east" }, "apply": { "model": "create:block/contraption_controls/block", "y": 90 } },
+    { "when": { "facing": "north" }, "apply": { "model": "create:block/contraption_controls/block" } },
+    { "when": { "facing": "south" }, "apply": { "model": "create:block/contraption_controls/block", "y": 180 } },
+    { "when": { "facing": "west" }, "apply": { "model": "create:block/contraption_controls/block", "y": 270 } }
+  ]
+}

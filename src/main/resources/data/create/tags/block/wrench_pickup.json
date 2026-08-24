@@ -10,6 +10,9 @@
     "create_warehouse:item_elevator_bottom",
     "create_warehouse:item_elevator_middle",
     "create_warehouse:item_elevator_top",
+    "create_warehouse:gantry_controller",
+    "create_warehouse:gantry_contact",
+    "create_warehouse:gantry_controls",
     "create_warehouse:forklift"
   ]
 }

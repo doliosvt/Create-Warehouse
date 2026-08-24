@@ -1,5 +1,6 @@
 # Gradle / Java
 .gradle/
+.gradle-user-home/
 build/
 out/
 bin/

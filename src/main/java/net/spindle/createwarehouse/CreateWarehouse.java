@@ -12,6 +12,7 @@ import net.spindle.createwarehouse.item.ModDataComponents;
 import net.spindle.createwarehouse.item.ModItems;
 import net.spindle.createwarehouse.item.custom.CrateStyles;
 import net.spindle.createwarehouse.client.ModPartialModels;
+import net.spindle.createwarehouse.network.ModNetwork;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
@@ -32,6 +33,7 @@ public final class CreateWarehouse {
         ModBlockEntities.register();
         ModArmInteractionPoints.register(modEventBus);
         ModEntityTypes.register();
+        modEventBus.addListener(ModNetwork::register);
         modEventBus.addListener(ModBlockEntities::registerCapabilities);
         modEventBus.addListener(ModEntityTypes::registerEntityAttributes);
         modEventBus.addListener(ClientModEvents::onClientSetup);

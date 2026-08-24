@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "key": {
+    "B": { "item": "create:brass_casing" },
+    "E": { "item": "create:electron_tube" },
+    "G": { "item": "create:gearshift" }
+  },
+  "pattern": [
+    " E ",
+    "BGB",
+    " E "
+  ],
+  "result": {
+    "count": 1,
+    "id": "create_warehouse:gantry_controller"
+  }
+}

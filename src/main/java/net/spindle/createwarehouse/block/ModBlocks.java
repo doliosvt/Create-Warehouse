@@ -9,20 +9,63 @@ import net.spindle.createwarehouse.block.custom.CratePackagerBlock;
 import net.spindle.createwarehouse.block.custom.CratePackagerStructuralBlock;
 import net.spindle.createwarehouse.block.custom.DrumPackagerBlock;
 import net.spindle.createwarehouse.block.custom.ForkliftBlock;
+import net.spindle.createwarehouse.block.custom.GantryContactBlock;
+import net.spindle.createwarehouse.block.custom.GantryControllerBlock;
+import net.spindle.createwarehouse.block.custom.GantryControlsBlock;
+import net.spindle.createwarehouse.block.custom.GantryControlsMovement;
+import net.spindle.createwarehouse.block.custom.GantryControlsMovingInteraction;
 import net.spindle.createwarehouse.block.custom.MultiblockDecorationBlock;
 import net.spindle.createwarehouse.block.custom.MultiblockPartBlock;
 import net.spindle.createwarehouse.block.custom.PalletBlock;
 import net.spindle.createwarehouse.block.custom.StaticShapeBlock;
 import net.spindle.createwarehouse.item.custom.FluidDrumItem;
 import net.spindle.createwarehouse.item.custom.ForkliftItem;
+import net.spindle.createwarehouse.item.custom.MultiblockDecorationItem;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 import static net.spindle.createwarehouse.CreateWarehouse.WAREHOUSE_REGISTRATE;
 import static net.spindle.createwarehouse.block.custom.MultiblockDecorationBlock.PartPlacement.at;
 import static net.spindle.createwarehouse.block.custom.MultiblockPartBlock.PartShape.FULL;
 import static net.spindle.createwarehouse.block.custom.MultiblockPartBlock.PartShape.LOW;
+import static com.simibubi.create.api.behaviour.interaction.MovingInteractionBehaviour.interactionBehaviour;
+import static com.simibubi.create.api.behaviour.movement.MovementBehaviour.movementBehaviour;
 
 public final class ModBlocks {
+    public static final BlockEntry<GantryControllerBlock> GANTRY_CONTROLLER = WAREHOUSE_REGISTRATE
+            .block("gantry_controller", GantryControllerBlock::new)
+            .initialProperties(SharedProperties::softMetal)
+            .properties(properties -> properties
+                    .mapColor(MapColor.TERRACOTTA_BROWN)
+                    .sound(SoundType.NETHERITE_BLOCK)
+                    .strength(3f)
+                    .noOcclusion())
+            .simpleItem()
+            .register();
+
+    public static final BlockEntry<GantryContactBlock> GANTRY_CONTACT = WAREHOUSE_REGISTRATE
+            .block("gantry_contact", GantryContactBlock::new)
+            .initialProperties(SharedProperties::softMetal)
+            .properties(properties -> properties
+                    .mapColor(MapColor.TERRACOTTA_YELLOW)
+                    .sound(SoundType.NETHERITE_BLOCK)
+                    .strength(3f)
+                    .lightLevel(GantryContactBlock::getLight))
+            .simpleItem()
+            .register();
+
+    public static final BlockEntry<GantryControlsBlock> GANTRY_CONTROLS = WAREHOUSE_REGISTRATE
+            .block("gantry_controls", GantryControlsBlock::new)
+            .initialProperties(SharedProperties::softMetal)
+            .properties(properties -> properties
+                    .mapColor(MapColor.TERRACOTTA_YELLOW)
+                    .sound(SoundType.NETHERITE_BLOCK)
+                    .strength(3f)
+                    .noOcclusion())
+            .onRegister(movementBehaviour(new GantryControlsMovement()))
+            .onRegister(interactionBehaviour(new GantryControlsMovingInteraction()))
+            .simpleItem()
+            .register();
+
     public static final BlockEntry<MultiblockPartBlock> MULTIBLOCK_PART = WAREHOUSE_REGISTRATE
             .block("multiblock_part", MultiblockPartBlock::new)
             .initialProperties(SharedProperties::softMetal)
@@ -40,7 +83,8 @@ public final class ModBlocks {
                     .sound(SoundType.NETHERITE_BLOCK)
                     .strength(3f)
                     .noOcclusion())
-            .simpleItem()
+            .item(MultiblockDecorationItem::new)
+            .build()
             .register();
 
     public static final BlockEntry<CratePackagerBlock> CRATE_PACKAGER = WAREHOUSE_REGISTRATE
@@ -78,7 +122,8 @@ public final class ModBlocks {
                     .sound(SoundType.WOOD)
                     .strength(2f)
                     .noOcclusion())
-            .simpleItem()
+            .item(MultiblockDecorationItem::new)
+            .build()
             .register();
     public static final BlockEntry<MultiblockDecorationBlock> PALLET_DEPOT = metalMultiblock(
             "pallet_depot", Block.box(0, 0, 0, 16, 13, 16),
@@ -164,7 +209,8 @@ public final class ModBlocks {
                         .sound(SoundType.NETHERITE_BLOCK)
                         .strength(3f)
                         .noOcclusion())
-                .simpleItem()
+                .item(MultiblockDecorationItem::new)
+                .build()
                 .register();
     }
 
@@ -178,7 +224,8 @@ public final class ModBlocks {
                         .sound(SoundType.WOOD)
                         .strength(2f)
                         .noOcclusion())
-                .simpleItem()
+                .item(MultiblockDecorationItem::new)
+                .build()
                 .register();
     }
 

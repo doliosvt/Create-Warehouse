@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "facing=down": { "model": "create:block/gearshift/block", "x": 180 },
+    "facing=east": { "model": "create:block/gearshift/block", "x": 90, "y": 90 },
+    "facing=north": { "model": "create:block/gearshift/block", "x": 90 },
+    "facing=south": { "model": "create:block/gearshift/block", "x": 90, "y": 180 },
+    "facing=up": { "model": "create:block/gearshift/block" },
+    "facing=west": { "model": "create:block/gearshift/block", "x": 90, "y": 270 }
+  }
+}

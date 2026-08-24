@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "redstone",
+  "ingredients": [
+    { "item": "create:contraption_controls" },
+    { "item": "create:brass_sheet" }
+  ],
+  "result": {
+    "count": 1,
+    "id": "create_warehouse:gantry_controls"
+  }
+}
