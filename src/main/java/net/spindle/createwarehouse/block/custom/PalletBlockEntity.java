@@ -52,6 +52,7 @@ public class PalletBlockEntity extends SmartBlockEntity {
         if (level == null || level.isClientSide)
             return;
 
+        PalletBlock.repairLowerParts(level, worldPosition);
         for (int slot = 0; slot < crates.size(); slot++) {
             if (!crates.get(slot).isEmpty())
                 PalletBlock.prepareCrateSlot(level, worldPosition, slot, crates.get(slot));

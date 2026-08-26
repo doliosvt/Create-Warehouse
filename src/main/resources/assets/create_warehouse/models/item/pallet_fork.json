@@ -1,0 +1,11 @@
+{
+  "parent": "create_warehouse:block/pallet_fork",
+  "gui_light": "side",
+  "display": {
+    "gui": {
+      "rotation": [22.5, 45, 0],
+      "translation": [2, 0, 0],
+      "scale": [0.35, 0.35, 0.35]
+    }
+  }
+}

@@ -28,6 +28,7 @@
   "block.create_warehouse.large_depot": "Большое депо",
   "block.create_warehouse.pallet": "Поддон",
   "block.create_warehouse.pallet_depot": "Паллетное депо",
+  "block.create_warehouse.pallet_fork": "Вилка для палет",
   "block.create_warehouse.fluid_drum": "Бочка для жидкости",
   "block.create_warehouse.item_elevator_bottom": "Низ предметного элеватора",
   "block.create_warehouse.item_elevator_middle": "Секция предметного элеватора",

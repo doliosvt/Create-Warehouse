@@ -1,6 +1,7 @@
 package net.spindle.createwarehouse.entity.custom;
 
 import com.simibubi.create.content.kinetics.mechanicalArm.ArmBlockEntity;
+import com.simibubi.create.content.contraptions.AbstractContraptionEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -11,18 +12,25 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.spindle.createwarehouse.block.ModBlocks;
 import net.spindle.createwarehouse.block.custom.PalletBlock;
 import net.spindle.createwarehouse.block.custom.ForkliftBlockEntity;
 import net.spindle.createwarehouse.entity.ModEntityTypes;
 import net.spindle.createwarehouse.compat.ArmPalletAccess;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 public class CarriedPalletEntity extends Entity {
     private static final int STANDARD_ARM = 0;
     private static final int FORKLIFT = 1;
+    private static final int PALLET_FORK = 2;
+    private static final int STATIONARY_PALLET_FORK = 3;
     private static final EntityDataAccessor<ItemStack> CARRIER =
             SynchedEntityData.defineId(CarriedPalletEntity.class, EntityDataSerializers.ITEM_STACK);
     private static final EntityDataAccessor<BlockPos> ARM_POS =
@@ -37,6 +45,10 @@ public class CarriedPalletEntity extends Entity {
             SynchedEntityData.defineId(CarriedPalletEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> FORKLIFT_RELEASED =
             SynchedEntityData.defineId(CarriedPalletEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Optional<UUID>> CONTRAPTION_UUID =
+            SynchedEntityData.defineId(CarriedPalletEntity.class, EntityDataSerializers.OPTIONAL_UUID);
+
+    private int missingPalletForkControllerTicks;
 
     public CarriedPalletEntity(EntityType<?> type, Level level) {
         super(type, level);
@@ -81,6 +93,25 @@ public class CarriedPalletEntity extends Entity {
         return entity;
     }
 
+    public static CarriedPalletEntity createForPalletFork(Level level,
+                                                           AbstractContraptionEntity contraption,
+                                                           BlockPos localForkPos,
+                                                           BlockPos localPalletPos,
+                                                           ItemStack carrier) {
+        CarriedPalletEntity entity = ModEntityTypes.CARRIED_PALLET.get().create(level);
+        if (entity == null)
+            throw new IllegalStateException("Could not create carried pallet entity");
+        entity.entityData.set(CARRIER, carrier.copy());
+        entity.entityData.set(ARM_POS, localForkPos.immutable());
+        entity.entityData.set(SOURCE_POS, localPalletPos.immutable());
+        entity.entityData.set(TARGET_POS, localPalletPos.immutable());
+        entity.entityData.set(CARRIER_MODE, PALLET_FORK);
+        entity.entityData.set(CONTRAPTION_UUID, Optional.of(contraption.getUUID()));
+        Vec3 position = contraption.toGlobalVector(Vec3.atLowerCornerOf(localPalletPos), 1);
+        entity.setPos(position.x, position.y, position.z);
+        return entity;
+    }
+
     public ItemStack getCarrier() {
         return entityData.get(CARRIER);
     }
@@ -99,6 +130,26 @@ public class CarriedPalletEntity extends Entity {
 
     public boolean isForkliftTransfer() {
         return entityData.get(CARRIER_MODE) == FORKLIFT;
+    }
+
+    public boolean isPalletForkTransfer() {
+        return entityData.get(CARRIER_MODE) == PALLET_FORK;
+    }
+
+    public boolean isStationaryPalletForkTransfer() {
+        return entityData.get(CARRIER_MODE) == STATIONARY_PALLET_FORK;
+    }
+
+    public void attachToPalletFork(AbstractContraptionEntity contraption,
+                                   BlockPos localForkPos, BlockPos localPalletPos) {
+        entityData.set(ARM_POS, localForkPos.immutable());
+        entityData.set(SOURCE_POS, localPalletPos.immutable());
+        entityData.set(TARGET_POS, localPalletPos.immutable());
+        entityData.set(CARRIER_MODE, PALLET_FORK);
+        entityData.set(CONTRAPTION_UUID, Optional.of(contraption.getUUID()));
+        missingPalletForkControllerTicks = 0;
+        Vec3 position = contraption.toGlobalVector(Vec3.atLowerCornerOf(localPalletPos), 1);
+        setPos(position.x, position.y, position.z);
     }
 
     public boolean isForkliftPickedUp() {
@@ -137,12 +188,21 @@ public class CarriedPalletEntity extends Entity {
         builder.define(CARRIER_MODE, STANDARD_ARM);
         builder.define(FORKLIFT_PICKED_UP, false);
         builder.define(FORKLIFT_RELEASED, false);
+        builder.define(CONTRAPTION_UUID, Optional.empty());
     }
 
     @Override
     public void tick() {
         super.tick();
         setDeltaMovement(0, 0, 0);
+        if (isPalletForkTransfer()) {
+            tickPalletForkTransfer();
+            return;
+        }
+        if (isStationaryPalletForkTransfer()) {
+            tickStationaryPalletForkTransfer();
+            return;
+        }
         if (isForkliftTransfer()) {
             tickForkliftTransfer();
             return;
@@ -159,6 +219,66 @@ public class CarriedPalletEntity extends Entity {
                 .getPalletData(getCarrier());
         if (PalletBlock.placeTransported(level(), getSourcePos(), palletData))
             discard();
+    }
+
+    private void tickPalletForkTransfer() {
+        if (level().isClientSide)
+            return;
+
+        AbstractContraptionEntity contraption = null;
+        Optional<UUID> contraptionUuid = entityData.get(CONTRAPTION_UUID);
+        if (level() instanceof ServerLevel serverLevel && contraptionUuid.isPresent()) {
+            Entity candidate = serverLevel.getEntity(contraptionUuid.get());
+            if (candidate instanceof AbstractContraptionEntity movingContraption
+                    && movingContraption.isAlive()
+                    && movingContraption.getContraption().getActorAt(getArmPos()) != null)
+                contraption = movingContraption;
+        }
+
+        if (contraption != null) {
+            missingPalletForkControllerTicks = 0;
+            Vec3 position = contraption.toGlobalVector(
+                    Vec3.atLowerCornerOf(getSourcePos()), 1);
+            setPos(position.x, position.y, position.z);
+            return;
+        }
+
+        if (++missingPalletForkControllerTicks <= 20)
+            return;
+        CompoundTag palletData = net.spindle.createwarehouse.item.custom.PalletCarrierItem
+                .getPalletData(getCarrier());
+        BlockPos destination = BlockPos.containing(position().add(.25, .25, .25));
+        if (PalletBlock.placeTransported(level(), destination, palletData))
+            discard();
+    }
+
+    private void tickStationaryPalletForkTransfer() {
+        if (level().isClientSide)
+            return;
+
+        BlockPos forkPos = getArmPos();
+        if (level().getBlockState(forkPos).is(ModBlocks.PALLET_FORK)) {
+            missingPalletForkControllerTicks = 0;
+            if (level().hasNeighborSignal(forkPos))
+                tryPlaceCarriedPallet();
+            return;
+        }
+
+        // During Create assembly the block disappears before the new moving
+        // actor can adopt this entity. Keep it alive through that short gap.
+        if (++missingPalletForkControllerTicks <= 20)
+            return;
+        tryPlaceCarriedPallet();
+    }
+
+    private boolean tryPlaceCarriedPallet() {
+        CompoundTag palletData = net.spindle.createwarehouse.item.custom.PalletCarrierItem
+                .getPalletData(getCarrier());
+        BlockPos destination = BlockPos.containing(position().add(.25, .25, .25));
+        if (!PalletBlock.placeTransported(level(), destination, palletData))
+            return false;
+        discard();
+        return true;
     }
 
     private void tickForkliftTransfer() {
@@ -224,6 +344,81 @@ public class CarriedPalletEntity extends Entity {
         return entities.isEmpty() ? null : entities.getFirst();
     }
 
+    public static boolean existsForPalletFork(Level level, UUID contraptionUuid,
+                                               BlockPos localForkPos, Vec3 around) {
+        return !findForPalletFork(level, contraptionUuid, localForkPos, around).isEmpty();
+    }
+
+    @Nullable
+    public static CarriedPalletEntity getForPalletFork(Level level, UUID contraptionUuid,
+                                                        BlockPos localForkPos, Vec3 around) {
+        List<CarriedPalletEntity> entities = findForPalletFork(
+                level, contraptionUuid, localForkPos, around);
+        if (entities.isEmpty())
+            return null;
+        entities.stream().skip(1).forEach(Entity::discard);
+        return entities.getFirst();
+    }
+
+    public static void discardForPalletFork(Level level, UUID contraptionUuid,
+                                            BlockPos localForkPos, Vec3 around) {
+        findForPalletFork(level, contraptionUuid, localForkPos, around)
+                .forEach(Entity::discard);
+    }
+
+    public static void parkForPalletFork(Level level, UUID contraptionUuid,
+                                         BlockPos localForkPos, Vec3 around,
+                                         BlockPos stationaryForkPos, Vec3 palletPosition,
+                                         ItemStack carrier, @Nullable UUID carriedEntityUuid) {
+        List<CarriedPalletEntity> moving = findForPalletFork(
+                level, contraptionUuid, localForkPos, around);
+        CarriedPalletEntity entity = null;
+        if (carriedEntityUuid != null && level instanceof ServerLevel serverLevel) {
+            Entity tracked = serverLevel.getEntity(carriedEntityUuid);
+            if (tracked instanceof CarriedPalletEntity carried && carried.isAlive())
+                entity = carried;
+        }
+        if (entity == null && !moving.isEmpty())
+            entity = moving.getFirst();
+
+        boolean created;
+        if (entity == null) {
+            entity = ModEntityTypes.CARRIED_PALLET.get().create(level);
+            if (entity == null)
+                return;
+            created = true;
+        } else {
+            created = false;
+        }
+        CarriedPalletEntity keptEntity = entity;
+        moving.stream().filter(candidate -> candidate != keptEntity).forEach(Entity::discard);
+
+        BlockPos palletPos = BlockPos.containing(palletPosition.add(.25, .25, .25));
+        entity.entityData.set(CARRIER, carrier.copy());
+        entity.entityData.set(ARM_POS, stationaryForkPos.immutable());
+        entity.entityData.set(SOURCE_POS, palletPos);
+        entity.entityData.set(TARGET_POS, palletPos);
+        entity.entityData.set(CARRIER_MODE, STATIONARY_PALLET_FORK);
+        entity.entityData.set(CONTRAPTION_UUID, Optional.empty());
+        entity.missingPalletForkControllerTicks = 0;
+        entity.setPos(palletPosition.x, palletPosition.y, palletPosition.z);
+        if (created)
+            level.addFreshEntity(entity);
+    }
+
+    @Nullable
+    public static CarriedPalletEntity getForStationaryPalletFork(Level level, BlockPos forkPos) {
+        AABB bounds = new AABB(forkPos).inflate(4);
+        List<CarriedPalletEntity> entities = level.getEntities(
+                ModEntityTypes.CARRIED_PALLET.get(), bounds,
+                entity -> entity.isStationaryPalletForkTransfer()
+                        && entity.getArmPos().equals(forkPos));
+        if (entities.isEmpty())
+            return null;
+        entities.stream().skip(1).forEach(Entity::discard);
+        return entities.getFirst();
+    }
+
     private static List<CarriedPalletEntity> findForArm(Level level, BlockPos armPos) {
         AABB bounds = new AABB(armPos).inflate(1);
         return level.getEntities(ModEntityTypes.CARRIED_PALLET.get(), bounds,
@@ -234,6 +429,17 @@ public class CarriedPalletEntity extends Entity {
         AABB bounds = new AABB(controllerPos).inflate(32);
         return level.getEntities(ModEntityTypes.CARRIED_PALLET.get(), bounds,
                 entity -> entity.getArmPos().equals(controllerPos));
+    }
+
+    private static List<CarriedPalletEntity> findForPalletFork(Level level, UUID contraptionUuid,
+                                                                BlockPos localForkPos, Vec3 around) {
+        AABB bounds = new AABB(around.x - 8, around.y - 8, around.z - 8,
+                around.x + 8, around.y + 8, around.z + 8);
+        return level.getEntities(ModEntityTypes.CARRIED_PALLET.get(), bounds,
+                entity -> entity.isPalletForkTransfer()
+                        && entity.getArmPos().equals(localForkPos)
+                        && entity.entityData.get(CONTRAPTION_UUID)
+                        .filter(contraptionUuid::equals).isPresent());
     }
 
     @Override
@@ -247,6 +453,8 @@ public class CarriedPalletEntity extends Entity {
         entityData.set(FORKLIFT_PICKED_UP, tag.contains("ForkliftPickedUp")
                 ? tag.getBoolean("ForkliftPickedUp") : isForkliftTransfer());
         entityData.set(FORKLIFT_RELEASED, tag.getBoolean("ForkliftReleased"));
+        entityData.set(CONTRAPTION_UUID, tag.hasUUID("ContraptionUuid")
+                ? Optional.of(tag.getUUID("ContraptionUuid")) : Optional.empty());
     }
 
     @Override
@@ -258,5 +466,6 @@ public class CarriedPalletEntity extends Entity {
         tag.putInt("CarrierMode", entityData.get(CARRIER_MODE));
         tag.putBoolean("ForkliftPickedUp", isForkliftPickedUp());
         tag.putBoolean("ForkliftReleased", isForkliftReleased());
+        entityData.get(CONTRAPTION_UUID).ifPresent(uuid -> tag.putUUID("ContraptionUuid", uuid));
     }
 }

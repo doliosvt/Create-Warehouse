@@ -13,6 +13,7 @@
     "create_warehouse:gantry_controller",
     "create_warehouse:gantry_contact",
     "create_warehouse:gantry_controls",
-    "create_warehouse:forklift"
+    "create_warehouse:forklift",
+    "create_warehouse:pallet_fork"
   ]
 }

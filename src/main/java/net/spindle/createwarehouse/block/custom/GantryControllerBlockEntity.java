@@ -27,6 +27,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.ticks.TickPriority;
+import net.spindle.createwarehouse.entity.custom.CarriedPalletEntity;
 
 /** Controls a line of Create gantry shafts in the same way an elevator pulley controls a column. */
 public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
@@ -41,6 +42,9 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
     private int targetLevelIndex;
     private boolean verticalStage;
     private boolean verticalArrived;
+    private CycleStage cycleStage = CycleStage.IDLE;
+    private double toolTravel;
+    private double toolRetractedTravel;
 
     public GantryControllerBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
@@ -75,12 +79,17 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
 
         if (activeContact != null && !activeContact.equals(contactPos))
             GantryContactBlock.setCalling(level, activeContact, false);
-        setVerticalStage(false);
+        unlockVerticalLine();
+        setLineLocked(false);
         targetCoordinate = coordinate;
         targetLevelIndex = Mth.clamp(levelIndex, -1, 255);
         targetAvailable = true;
         arrived = false;
         verticalArrived = false;
+        verticalStage = false;
+        cycleStage = CycleStage.HORIZONTAL_TARGET;
+        toolTravel = 0;
+        toolRetractedTravel = 0;
         activeContact = contactPos.immutable();
         GantryContactBlock.setCalling(level, activeContact, true);
         setChanged();
@@ -98,24 +107,35 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
 
     private void updateMovement() {
         ShaftLine line = getShaftLine();
-        if (verticalStage) {
-            updateVerticalMovement(line);
-            return;
-        }
-
-        if (line != null && isShaftLinePowered(line)) {
-            setOutputModifier(1);
-            return;
-        }
-
-        if (!targetAvailable) {
-            setOutputModifier(0);
-            return;
-        }
-
         if (line == null) {
             setOutputModifier(0);
             return;
+        }
+
+        switch (cycleStage) {
+            case IDLE -> {
+                setLineLocked(false);
+                setOutputModifier(isShaftLinePowered(line) ? 1 : 0);
+            }
+            case HORIZONTAL_TARGET -> updateHorizontalMovement(line, false);
+            case VERTICAL_TARGET -> updateVerticalMovement(line, false);
+            case TOOL_EXTENDING, TOOL_RETRACTING -> updateToolMovement(line);
+            case VERTICAL_HOME -> updateVerticalMovement(line, true);
+            case HORIZONTAL_HOME -> updateHorizontalMovement(line, true);
+        }
+    }
+
+    private void updateHorizontalMovement(ShaftLine line, boolean returningHome) {
+        setLineLocked(false);
+        int destination = targetCoordinate;
+        GantryStop homeStop = null;
+        if (returningHome) {
+            homeStop = findHomeStop(line);
+            if (homeStop == null) {
+                setOutputModifier(0);
+                return;
+            }
+            destination = homeStop.coordinate();
         }
 
         Double carriageCoordinate = findCarriageCoordinate(line);
@@ -124,18 +144,26 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
             return;
         }
 
-        double difference = targetCoordinate - carriageCoordinate;
+        double difference = destination - carriageCoordinate;
         if (Math.abs(difference) < .5) {
             setOutputModifier(0);
-            if (!arrived) {
-                arrived = true;
-                if (activeContact != null)
-                    GantryContactBlock.pulse(level, activeContact);
-                setChanged();
-                sendData();
-                if (targetLevelIndex >= 0)
-                    setVerticalStage(true);
+            if (returningHome) {
+                completeCycle(homeStop);
+                return;
             }
+
+            if (!arrived && activeContact != null)
+                GantryContactBlock.pulse(level, activeContact);
+            arrived = true;
+            if (targetLevelIndex >= 0) {
+                verticalStage = true;
+                cycleStage = CycleStage.VERTICAL_TARGET;
+                setLineLocked(true);
+            } else {
+                cycleStage = CycleStage.IDLE;
+            }
+            setChanged();
+            sendData();
             return;
         }
 
@@ -152,7 +180,7 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
         setOutputModifier(-desiredCoordinateSign * shaftFacingSign * inputSign);
     }
 
-    private void updateVerticalMovement(ShaftLine horizontalLine) {
+    private void updateVerticalMovement(ShaftLine horizontalLine, boolean returningHome) {
         if (horizontalLine == null) {
             setOutputModifier(0);
             return;
@@ -165,13 +193,15 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
             return;
         }
 
+        setVerticalLineLocked(verticalSystem.shaftLine(), false);
+
         List<GantryLevel> levels = createVerticalLevels(verticalSystem.shaftLine());
         if (levels.isEmpty()) {
             setOutputModifier(0);
             return;
         }
 
-        int selectedLevel = Mth.clamp(targetLevelIndex, 0, levels.size() - 1);
+        int selectedLevel = returningHome ? 0 : Mth.clamp(targetLevelIndex, 0, levels.size() - 1);
         GantryLevel targetLevel = levels.get(selectedLevel);
 
         Double carriageCoordinate = findCarriageCoordinate(verticalSystem.shaftLine());
@@ -183,11 +213,19 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
         double difference = targetLevel.coordinate() - carriageCoordinate;
         if (Math.abs(difference) < .5) {
             setOutputModifier(0);
-            if (!verticalArrived) {
-                verticalArrived = true;
-                setChanged();
-                sendData();
+            verticalArrived = true;
+            if (returningHome) {
+                verticalStage = false;
+                setLineLocked(false);
+                cycleStage = CycleStage.HORIZONTAL_HOME;
+            } else {
+                setVerticalLineLocked(verticalSystem.shaftLine(), true);
+                toolTravel = 0;
+                toolRetractedTravel = 0;
+                cycleStage = CycleStage.TOOL_EXTENDING;
             }
+            setChanged();
+            sendData();
             return;
         }
 
@@ -203,6 +241,83 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
         int inputSign = inputSpeed > 0 ? 1 : -1;
         int transferSign = verticalSystem.transferModifier() > 0 ? 1 : -1;
         setOutputModifier(-desiredCoordinateSign * shaftFacingSign * inputSign * transferSign);
+    }
+
+    private void updateToolMovement(ShaftLine horizontalLine) {
+        setLineLocked(true);
+        VerticalSystem verticalSystem = findVerticalSystem(horizontalLine);
+        if (verticalSystem == null) {
+            setOutputModifier(0);
+            return;
+        }
+
+        setVerticalLineLocked(verticalSystem.shaftLine(), true);
+        if (cycleStage == CycleStage.TOOL_EXTENDING) {
+            if (hasCarriedPalletNear(verticalSystem.shaftLine())) {
+                cycleStage = CycleStage.TOOL_RETRACTING;
+                toolRetractedTravel = 0;
+                setOutputModifier(-1);
+                setChanged();
+                sendData();
+                return;
+            }
+
+            setOutputModifier(1);
+            toolTravel += Math.abs(getSpeed());
+            if (toolTravel > 1_000_000)
+                toolTravel = 1_000_000;
+            return;
+        }
+
+        setOutputModifier(-1);
+        toolRetractedTravel += Math.abs(getSpeed());
+        if (toolRetractedTravel + .001 < toolTravel)
+            return;
+
+        setOutputModifier(0);
+        setVerticalLineLocked(verticalSystem.shaftLine(), false);
+        cycleStage = CycleStage.VERTICAL_HOME;
+        verticalArrived = false;
+        setChanged();
+        sendData();
+    }
+
+    private boolean hasCarriedPalletNear(ShaftLine verticalLine) {
+        BlockPos first = verticalLine.shafts().getFirst();
+        BlockPos last = verticalLine.shafts().getLast();
+        AABB searchBox = new AABB(
+                Math.min(first.getX(), last.getX()), Math.min(first.getY(), last.getY()),
+                Math.min(first.getZ(), last.getZ()), Math.max(first.getX(), last.getX()) + 1,
+                Math.max(first.getY(), last.getY()) + 1, Math.max(first.getZ(), last.getZ()) + 1)
+                .inflate(32);
+        return !level.getEntitiesOfClass(CarriedPalletEntity.class, searchBox,
+                CarriedPalletEntity::isPalletForkTransfer).isEmpty();
+    }
+
+    private GantryStop findHomeStop(ShaftLine line) {
+        List<GantryStop> stops = findStopsOnLine(level, line.shafts().getFirst(), line.axis());
+        return stops.isEmpty() ? null : stops.getFirst();
+    }
+
+    private void completeCycle(GantryStop homeStop) {
+        setOutputModifier(0);
+        setLineLocked(false);
+        if (activeContact != null)
+            GantryContactBlock.setCalling(level, activeContact, false);
+        if (homeStop != null)
+            GantryContactBlock.pulse(level, homeStop.contactPos());
+        targetCoordinate = homeStop == null ? targetCoordinate : homeStop.coordinate();
+        targetLevelIndex = 0;
+        targetAvailable = false;
+        arrived = true;
+        verticalArrived = true;
+        verticalStage = false;
+        cycleStage = CycleStage.IDLE;
+        activeContact = homeStop == null ? null : homeStop.contactPos();
+        toolTravel = 0;
+        toolRetractedTravel = 0;
+        setChanged();
+        sendData();
     }
 
     private VerticalSystem findVerticalSystem(ShaftLine horizontalLine) {
@@ -261,6 +376,31 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
             return;
         level.setBlock(worldPosition, state.setValue(GantryControllerBlock.POWERING, locked), Block.UPDATE_ALL);
         level.updateNeighborsAt(worldPosition, state.getBlock());
+    }
+
+    private void setVerticalLineLocked(ShaftLine verticalLine, boolean locked) {
+        if (level == null || level.isClientSide())
+            return;
+        for (BlockPos shaftPos : verticalLine.shafts()) {
+            BlockState state = level.getBlockState(shaftPos);
+            if (!isShaftAlong(state, Direction.Axis.Y))
+                continue;
+            boolean shouldBePowered = locked || level.hasNeighborSignal(shaftPos);
+            if (state.getValue(GantryShaftBlock.POWERED) == shouldBePowered)
+                continue;
+            level.setBlock(shaftPos, state.setValue(GantryShaftBlock.POWERED, shouldBePowered), Block.UPDATE_ALL);
+        }
+    }
+
+    private void unlockVerticalLine() {
+        if (level == null || level.isClientSide())
+            return;
+        ShaftLine horizontalLine = getShaftLine();
+        if (horizontalLine == null)
+            return;
+        VerticalSystem verticalSystem = findVerticalSystem(horizontalLine);
+        if (verticalSystem != null)
+            setVerticalLineLocked(verticalSystem.shaftLine(), false);
     }
 
     private boolean isShaftLinePowered(ShaftLine line) {
@@ -587,6 +727,9 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
         tag.putInt("TargetLevelIndex", targetLevelIndex);
         tag.putBoolean("VerticalStage", verticalStage);
         tag.putBoolean("VerticalArrived", verticalArrived);
+        tag.putInt("CycleStage", cycleStage.ordinal());
+        tag.putDouble("ToolTravel", toolTravel);
+        tag.putDouble("ToolRetractedTravel", toolRetractedTravel);
         if (activeContact != null) {
             tag.putInt("ContactX", activeContact.getX());
             tag.putInt("ContactY", activeContact.getY());
@@ -607,6 +750,18 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
                 : -1;
         verticalStage = tag.getBoolean("VerticalStage");
         verticalArrived = tag.getBoolean("VerticalArrived");
+        if (tag.contains("CycleStage")) {
+            int stage = Mth.clamp(tag.getInt("CycleStage"), 0, CycleStage.values().length - 1);
+            cycleStage = CycleStage.values()[stage];
+        } else if (verticalStage) {
+            cycleStage = CycleStage.VERTICAL_TARGET;
+        } else if (targetAvailable && !arrived) {
+            cycleStage = CycleStage.HORIZONTAL_TARGET;
+        } else {
+            cycleStage = CycleStage.IDLE;
+        }
+        toolTravel = Math.max(0, tag.getDouble("ToolTravel"));
+        toolRetractedTravel = Math.max(0, tag.getDouble("ToolRetractedTravel"));
         activeContact = tag.getBoolean("HasContact")
                 ? new BlockPos(tag.getInt("ContactX"), tag.getInt("ContactY"), tag.getInt("ContactZ"))
                 : null;
@@ -617,6 +772,16 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
     private record ShaftLine(Direction.Axis axis, Direction shaftFacing, List<BlockPos> shafts) {}
 
     private record VerticalSystem(ShaftLine shaftLine, float transferModifier) {}
+
+    private enum CycleStage {
+        IDLE,
+        HORIZONTAL_TARGET,
+        VERTICAL_TARGET,
+        TOOL_EXTENDING,
+        TOOL_RETRACTING,
+        VERTICAL_HOME,
+        HORIZONTAL_HOME
+    }
 
     public record GantryStop(int coordinate, BlockPos contactPos) {}
 

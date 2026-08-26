@@ -28,6 +28,7 @@
   "block.create_warehouse.large_depot": "Großes Depot",
   "block.create_warehouse.pallet": "Palette",
   "block.create_warehouse.pallet_depot": "Palettendepot",
+  "block.create_warehouse.pallet_fork": "Palettengabel",
   "block.create_warehouse.fluid_drum": "Flüssigkeitsfass",
   "block.create_warehouse.item_elevator_bottom": "Güteraufzug (unten)",
   "block.create_warehouse.item_elevator_middle": "Güteraufzug (Mitte)",

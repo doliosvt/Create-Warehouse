@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "create_warehouse:block/pallet_fork" },
+    "facing=east": { "model": "create_warehouse:block/pallet_fork", "y": 90 },
+    "facing=south": { "model": "create_warehouse:block/pallet_fork", "y": 180 },
+    "facing=west": { "model": "create_warehouse:block/pallet_fork", "y": 270 }
+  }
+}

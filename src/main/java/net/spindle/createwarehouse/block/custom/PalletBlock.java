@@ -158,8 +158,13 @@ public class PalletBlock extends MultiblockDecorationBlock implements IBE<Pallet
         BlockPos offset = CRATE_CELLS[slot % CRATE_CELLS.length].above();
         BlockPos partPos = masterPos.offset(offset);
         BlockState partState = level.getBlockState(partPos);
-        if (isOwnedPart(partState, partPos, masterPos))
+        if (isOwnedPart(partState, partPos, masterPos)) {
+            if (partState.getValue(MultiblockPartBlock.PART_SHAPE)
+                    != MultiblockPartBlock.PartShape.PALLET_CRATES_TOP)
+                level.setBlock(partPos, createPartState(offset,
+                        MultiblockPartBlock.PartShape.PALLET_CRATES_TOP), Block.UPDATE_ALL);
             return true;
+        }
         if (!partState.canBeReplaced())
             return false;
 
@@ -364,8 +369,37 @@ public class PalletBlock extends MultiblockDecorationBlock implements IBE<Pallet
             level.destroyBlock(pos, false);
             return false;
         }
+        if (!repairLowerParts(level, pos)) {
+            removeOwnedPartsSilently(level, pos);
+            level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+            return false;
+        }
         pallet.loadFromTransport(data, level.registryAccess());
         return true;
+    }
+
+    public static boolean repairLowerParts(Level level, BlockPos masterPos) {
+        BlockState masterState = level.getBlockState(masterPos);
+        if (!masterState.is(ModBlocks.PALLET))
+            return false;
+
+        MultiblockPartBlock.PartShape expectedShape = masterState.getValue(SUPPORTS)
+                ? MultiblockPartBlock.PartShape.PALLET_FRAME_BOTTOM
+                : MultiblockPartBlock.PartShape.PALLET;
+        boolean complete = true;
+        for (BlockPos offset : LOWER_PARTS) {
+            BlockPos partPos = masterPos.offset(offset);
+            BlockState partState = level.getBlockState(partPos);
+            if (isOwnedPart(partState, partPos, masterPos)
+                    && partState.getValue(MultiblockPartBlock.PART_SHAPE) == expectedShape)
+                continue;
+            if (!partState.canBeReplaced() && !isOwnedPart(partState, partPos, masterPos)) {
+                complete = false;
+                continue;
+            }
+            level.setBlock(partPos, createPartState(offset, expectedShape), Block.UPDATE_ALL);
+        }
+        return complete;
     }
 
     private static ItemInteractionResult tryAddUpperPallet(ItemStack stack, BlockState state, Level level,

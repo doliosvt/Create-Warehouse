@@ -1,0 +1,6 @@
+{
+  "parent": "create_warehouse:block/forklift/full_model/forklift",
+  "textures": {
+    "particle": "create_warehouse:block/forklift"
+  }
+}

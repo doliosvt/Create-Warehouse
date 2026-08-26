@@ -17,6 +17,8 @@ import net.spindle.createwarehouse.block.custom.GantryControlsMovingInteraction;
 import net.spindle.createwarehouse.block.custom.MultiblockDecorationBlock;
 import net.spindle.createwarehouse.block.custom.MultiblockPartBlock;
 import net.spindle.createwarehouse.block.custom.PalletBlock;
+import net.spindle.createwarehouse.block.custom.PalletForkBlock;
+import net.spindle.createwarehouse.block.custom.PalletForkMovement;
 import net.spindle.createwarehouse.block.custom.StaticShapeBlock;
 import net.spindle.createwarehouse.item.custom.FluidDrumItem;
 import net.spindle.createwarehouse.item.custom.ForkliftItem;
@@ -128,6 +130,18 @@ public final class ModBlocks {
     public static final BlockEntry<MultiblockDecorationBlock> PALLET_DEPOT = metalMultiblock(
             "pallet_depot", Block.box(0, 0, 0, 16, 13, 16),
             at(-1, 0, 0, LOW), at(0, 0, 1, LOW), at(-1, 0, 1, LOW));
+    public static final BlockEntry<PalletForkBlock> PALLET_FORK = WAREHOUSE_REGISTRATE
+            .block("pallet_fork", PalletForkBlock::new)
+            .initialProperties(SharedProperties::softMetal)
+            .properties(properties -> properties
+                    .mapColor(MapColor.TERRACOTTA_YELLOW)
+                    .sound(SoundType.NETHERITE_BLOCK)
+                    .strength(3f)
+                    .noOcclusion()
+                    .isRedstoneConductor((state, level, pos) -> false))
+            .onRegister(movementBehaviour(new PalletForkMovement()))
+            .simpleItem()
+            .register();
     public static final BlockEntry<StaticShapeBlock> FLUID_DRUM = WAREHOUSE_REGISTRATE
             .block("fluid_drum", properties -> new StaticShapeBlock(properties,
                     Block.box(2, 0, 2, 14, 14, 14)))

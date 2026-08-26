@@ -51,6 +51,9 @@ public class CarriedPalletRenderer extends EntityRenderer<CarriedPalletEntity> {
             poseStack.translate(0, 0, 1);
             poseStack.mulPose(Axis.YP.rotationDegrees(entity.getForkliftRenderYaw(partialTicks)));
             poseStack.translate(0, 0, -1);
+        } else if (entity.isPalletForkTransfer()
+                || entity.isStationaryPalletForkTransfer()) {
+            // The entity position is already the lower corner of the carried pallet.
         } else if (entity.level().getBlockEntity(entity.getArmPos()) instanceof ArmBlockEntity arm
                 && ArmPalletAccess.isHoldingPallet(arm) && !entity.isForkliftTransfer()) {
             ArmPalletRenderAccess.positionPalletAtClaw(poseStack, arm, partialTicks);

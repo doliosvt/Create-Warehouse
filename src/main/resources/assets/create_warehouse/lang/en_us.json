@@ -28,6 +28,7 @@
   "block.create_warehouse.large_depot": "Large Depot",
   "block.create_warehouse.pallet": "Pallet",
   "block.create_warehouse.pallet_depot": "Pallet Depot",
+  "block.create_warehouse.pallet_fork": "Pallet Fork",
   "block.create_warehouse.fluid_drum": "Fluid Drum",
   "block.create_warehouse.item_elevator_bottom": "Item Elevator Bottom",
   "block.create_warehouse.item_elevator_middle": "Item Elevator Middle",
