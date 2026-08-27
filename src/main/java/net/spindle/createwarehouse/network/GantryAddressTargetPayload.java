@@ -98,12 +98,7 @@ public record GantryAddressTargetPayload(int entityId, BlockPos controlsPos, int
                     address.contactNumber(), contactCount), true);
             return false;
         }
-        if (levelCount == 0) {
-            player.displayClientMessage(Component.translatable(
-                    "message.create_warehouse.gantry_controls.no_levels"), true);
-            return false;
-        }
-        if (address.levelNumber() > levelCount) {
+        if (levelCount > 0 && address.levelNumber() > levelCount) {
             player.displayClientMessage(Component.translatable(
                     "message.create_warehouse.gantry_controls.invalid_level",
                     address.levelNumber(), levelCount), true);

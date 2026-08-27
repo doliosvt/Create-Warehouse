@@ -9,14 +9,17 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.NonNullList;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.spindle.createwarehouse.block.ModBlocks;
 import net.spindle.createwarehouse.compat.ArmPalletAccess;
 import net.spindle.createwarehouse.compat.ArmPalletRenderAccess;
+import net.spindle.createwarehouse.block.custom.PalletBlock;
 import net.spindle.createwarehouse.block.custom.PalletBlockEntity;
 import net.spindle.createwarehouse.block.custom.PalletRenderer;
 import net.spindle.createwarehouse.item.custom.PalletCarrierItem;
@@ -62,11 +65,22 @@ public class CarriedPalletRenderer extends EntityRenderer<CarriedPalletEntity> {
             poseStack.translate(0, 0, -1);
         }
 
-        blockRenderer.renderSingleBlock(ModBlocks.PALLET.getDefaultState(), poseStack, buffer,
-                light, OverlayTexture.NO_OVERLAY);
-        NonNullList<ItemStack> cargo = PalletBlockEntity.readTransportedCargo(
-                PalletCarrierItem.getPalletData(entity.getCarrier()), entity.registryAccess());
-        PalletRenderer.renderCargo(cargo::get, poseStack, buffer, light, OverlayTexture.NO_OVERLAY);
+        var palletData = PalletCarrierItem.getPalletData(entity.getCarrier());
+        int stackSize = PalletBlock.getTransportedStackSize(palletData);
+        for (int layer = 0; layer < stackSize; layer++) {
+            CompoundTag layerData = PalletBlock.getTransportedStackLayer(palletData, layer);
+            poseStack.pushPose();
+            poseStack.translate(0, layer * 2, 0);
+            BlockState palletState = ModBlocks.PALLET.getDefaultState()
+                    .setValue(PalletBlock.SUPPORTS, layerData.getBoolean("Supports"));
+            blockRenderer.renderSingleBlock(palletState, poseStack, buffer,
+                    light, OverlayTexture.NO_OVERLAY);
+            NonNullList<ItemStack> cargo = PalletBlockEntity.readTransportedCargo(
+                    layerData, entity.registryAccess());
+            PalletRenderer.renderCargo(cargo::get, poseStack, buffer,
+                    light, OverlayTexture.NO_OVERLAY);
+            poseStack.popPose();
+        }
         poseStack.popPose();
         super.render(entity, yaw, partialTicks, poseStack, buffer, light);
     }

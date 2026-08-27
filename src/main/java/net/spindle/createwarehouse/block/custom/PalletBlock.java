@@ -3,6 +3,8 @@ package net.spindle.createwarehouse.block.custom;
 import com.simibubi.create.foundation.block.IBE;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.LivingEntity;
@@ -29,6 +31,7 @@ import org.jetbrains.annotations.Nullable;
 public class PalletBlock extends MultiblockDecorationBlock implements IBE<PalletBlockEntity> {
     public static final BooleanProperty SUPPORTS = BooleanProperty.create("supports");
     public static final int MAX_STACK_HEIGHT = 5;
+    private static final String STACKED_PALLETS = "StackedPallets";
 
     private static final BlockPos[] LOWER_PARTS = {
             new BlockPos(-1, 0, 0), new BlockPos(0, 0, 1), new BlockPos(-1, 0, 1)
@@ -252,6 +255,22 @@ public class PalletBlock extends MultiblockDecorationBlock implements IBE<Pallet
                 && level.getBlockEntity(pos) instanceof PalletBlockEntity;
     }
 
+    /**
+     * The pallet fork can lift a pallet together with every pallet resting on
+     * its supports. Other logistics keep using {@link #canMove(Level, BlockPos)}
+     * and continue to take only the top pallet from a stack.
+     */
+    public static boolean canMoveStack(Level level, BlockPos pos) {
+        for (int layer = 0; layer < MAX_STACK_HEIGHT; layer++) {
+            BlockPos palletPos = pos.above(layer * 2);
+            if (!level.getBlockState(palletPos).is(ModBlocks.PALLET))
+                return layer > 0;
+            if (!(level.getBlockEntity(palletPos) instanceof PalletBlockEntity))
+                return false;
+        }
+        return !level.getBlockState(pos.above(MAX_STACK_HEIGHT * 2)).is(ModBlocks.PALLET);
+    }
+
     public static BlockPos findStackBase(Level level, BlockPos palletPos) {
         BlockPos base = palletPos;
         while (level.getBlockState(base.below(2)).is(ModBlocks.PALLET))
@@ -297,11 +316,56 @@ public class PalletBlock extends MultiblockDecorationBlock implements IBE<Pallet
     }
 
     @Nullable
+    public static CompoundTag removeStackForTransport(Level level, BlockPos pos) {
+        CompoundTag data = snapshotStackForTransport(level, pos);
+        if (data == null)
+            return null;
+
+        int stackSize = getTransportedStackSize(data);
+        for (int layer = stackSize - 1; layer >= 0; layer--) {
+            if (removeForTransport(level, pos.above(layer * 2)) == null)
+                return null;
+        }
+        return data;
+    }
+
+    @Nullable
     public static CompoundTag snapshotForTransport(Level level, BlockPos pos) {
         if (!canMove(level, pos)
                 || !(level.getBlockEntity(pos) instanceof PalletBlockEntity pallet))
             return null;
         return pallet.saveForTransport(level.registryAccess());
+    }
+
+    @Nullable
+    public static CompoundTag snapshotStackForTransport(Level level, BlockPos pos) {
+        if (!canMoveStack(level, pos)
+                || !(level.getBlockEntity(pos) instanceof PalletBlockEntity bottomPallet))
+            return null;
+
+        CompoundTag data = bottomPallet.saveForTransport(level.registryAccess());
+        ListTag stackedPallets = new ListTag();
+        for (int layer = 1; layer < MAX_STACK_HEIGHT; layer++) {
+            BlockPos palletPos = pos.above(layer * 2);
+            if (!level.getBlockState(palletPos).is(ModBlocks.PALLET))
+                break;
+            if (!(level.getBlockEntity(palletPos) instanceof PalletBlockEntity pallet))
+                return null;
+            stackedPallets.add(pallet.saveForTransport(level.registryAccess()));
+        }
+        if (!stackedPallets.isEmpty())
+            data.put(STACKED_PALLETS, stackedPallets);
+        return data;
+    }
+
+    public static int getTransportedStackSize(CompoundTag data) {
+        return 1 + data.getList(STACKED_PALLETS, Tag.TAG_COMPOUND).size();
+    }
+
+    public static CompoundTag getTransportedStackLayer(CompoundTag data, int layer) {
+        if (layer == 0)
+            return data;
+        return data.getList(STACKED_PALLETS, Tag.TAG_COMPOUND).getCompound(layer - 1);
     }
 
     private static void detachSupportsSilently(Level level, BlockPos lowerPos) {
@@ -357,11 +421,40 @@ public class PalletBlock extends MultiblockDecorationBlock implements IBE<Pallet
         return true;
     }
 
+    public static boolean canPlaceTransportedStack(Level level, BlockPos pos, CompoundTag data) {
+        int stackSize = getTransportedStackSize(data);
+        if (stackSize > MAX_STACK_HEIGHT)
+            return false;
+        for (int layer = 0; layer < stackSize; layer++) {
+            if (!canPlaceTransported(level, pos.above(layer * 2)))
+                return false;
+        }
+        return true;
+    }
+
     public static boolean placeTransported(Level level, BlockPos pos, CompoundTag data) {
+        if (!canPlaceTransportedStack(level, pos, data))
+            return false;
+
+        int stackSize = getTransportedStackSize(data);
+        for (int layer = 0; layer < stackSize; layer++) {
+            if (placeTransportedLayer(level, pos.above(layer * 2),
+                    getTransportedStackLayer(data, layer)))
+                continue;
+
+            for (int placedLayer = layer - 1; placedLayer >= 0; placedLayer--)
+                removeForTransport(level, pos.above(placedLayer * 2));
+            return false;
+        }
+        return true;
+    }
+
+    private static boolean placeTransportedLayer(Level level, BlockPos pos, CompoundTag data) {
         if (!canPlaceTransported(level, pos))
             return false;
 
-        BlockState state = ModBlocks.PALLET.getDefaultState();
+        boolean supports = data.getBoolean("Supports");
+        BlockState state = ModBlocks.PALLET.getDefaultState().setValue(SUPPORTS, supports);
         if (!level.setBlock(pos, state, Block.UPDATE_ALL))
             return false;
         ModBlocks.PALLET.get().setPlacedBy(level, pos, state, null, ModBlocks.PALLET.asStack());
@@ -369,6 +462,8 @@ public class PalletBlock extends MultiblockDecorationBlock implements IBE<Pallet
             level.destroyBlock(pos, false);
             return false;
         }
+        if (supports)
+            attachSupports(level, pos, state);
         if (!repairLowerParts(level, pos)) {
             removeOwnedPartsSilently(level, pos);
             level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);

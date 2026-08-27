@@ -2,15 +2,21 @@ package net.spindle.createwarehouse.block.custom;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 
 import com.simibubi.create.AllBlocks;
 import com.simibubi.create.content.contraptions.gantry.GantryCarriageBlock;
 import com.simibubi.create.content.contraptions.gantry.GantryCarriageBlockEntity;
 import com.simibubi.create.content.contraptions.gantry.GantryContraption;
 import com.simibubi.create.content.contraptions.gantry.GantryContraptionEntity;
+import com.simibubi.create.content.contraptions.piston.MechanicalPistonBlock;
+import com.simibubi.create.content.contraptions.piston.MechanicalPistonBlock.PistonState;
+import com.simibubi.create.content.contraptions.piston.MechanicalPistonBlockEntity;
 import com.simibubi.create.content.kinetics.RotationPropagator;
 import com.simibubi.create.content.kinetics.gantry.GantryShaftBlock;
 import com.simibubi.create.content.kinetics.transmission.SplitShaftBlockEntity;
@@ -28,11 +34,19 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.ticks.TickPriority;
 import net.spindle.createwarehouse.entity.custom.CarriedPalletEntity;
+import net.spindle.createwarehouse.mixin.MechanicalPistonBlockEntityAccessor;
 
 /** Controls a line of Create gantry shafts in the same way an elevator pulley controls a column. */
 public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
+    private static final Map<Level, Map<BlockPos, Integer>> MANAGED_VERTICAL_LOCKS = new WeakHashMap<>();
     private static final int MAX_SHAFT_LENGTH = 256;
     private static final int CONTACT_SEARCH_RADIUS = 8;
+    private static final int TOOL_SEARCH_HORIZONTAL_RADIUS = 16;
+    private static final int TOOL_SEARCH_VERTICAL_RADIUS = 8;
+    private static final int COMPONENT_DISCOVERY_TICKS = 40;
+    private static final int TOOL_SETTLE_TICKS = 5;
+    private static final int TOOL_TIMEOUT_TICKS = 20 * 60;
+    private static final float PISTON_EXTENSION_EPSILON = 1.0e-3f;
 
     private int targetCoordinate;
     private boolean targetAvailable;
@@ -45,6 +59,12 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
     private CycleStage cycleStage = CycleStage.IDLE;
     private double toolTravel;
     private double toolRetractedTravel;
+    private int toolTicks;
+    private boolean toolPickupSucceeded;
+    private boolean toolStartedWithPallet;
+    private int componentDiscoveryTicks;
+    private BlockPos toolPistonPos;
+    private final Set<BlockPos> managedVerticalLocks = new HashSet<>();
 
     public GantryControllerBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
@@ -80,6 +100,7 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
         if (activeContact != null && !activeContact.equals(contactPos))
             GantryContactBlock.setCalling(level, activeContact, false);
         unlockVerticalLine();
+        clearManagedVerticalLocks();
         setLineLocked(false);
         targetCoordinate = coordinate;
         targetLevelIndex = Mth.clamp(levelIndex, -1, 255);
@@ -90,6 +111,11 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
         cycleStage = CycleStage.HORIZONTAL_TARGET;
         toolTravel = 0;
         toolRetractedTravel = 0;
+        toolTicks = 0;
+        toolPickupSucceeded = false;
+        toolStartedWithPallet = false;
+        componentDiscoveryTicks = 0;
+        toolPistonPos = null;
         activeContact = contactPos.immutable();
         GantryContactBlock.setCalling(level, activeContact, true);
         setChanged();
@@ -122,6 +148,11 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
             case TOOL_EXTENDING, TOOL_RETRACTING -> updateToolMovement(line);
             case VERTICAL_HOME -> updateVerticalMovement(line, true);
             case HORIZONTAL_HOME -> updateHorizontalMovement(line, true);
+            case TARGET_REACHED -> holdAtAvailableTarget(line);
+            case VERTICAL_DISCOVERY -> updateVerticalDiscovery(line);
+            case TOOL_DISCOVERY -> updateToolDiscovery(line);
+            case TOOL_SETTLING -> updateToolSettling(line);
+            case HOME_SETTLING -> updateHomeSettling(line);
         }
     }
 
@@ -148,7 +179,7 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
         if (Math.abs(difference) < .5) {
             setOutputModifier(0);
             if (returningHome) {
-                completeCycle(homeStop);
+                beginHomeSettling(line, homeStop);
                 return;
             }
 
@@ -156,11 +187,12 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
                 GantryContactBlock.pulse(level, activeContact);
             arrived = true;
             if (targetLevelIndex >= 0) {
-                verticalStage = true;
-                cycleStage = CycleStage.VERTICAL_TARGET;
                 setLineLocked(true);
+                componentDiscoveryTicks = 0;
+                cycleStage = CycleStage.VERTICAL_DISCOVERY;
             } else {
-                cycleStage = CycleStage.IDLE;
+                stopAtAvailableTarget(line, null);
+                return;
             }
             setChanged();
             sendData();
@@ -189,7 +221,10 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
         setLineLocked(true);
         VerticalSystem verticalSystem = findVerticalSystem(horizontalLine);
         if (verticalSystem == null) {
-            setOutputModifier(0);
+            if (returningHome)
+                skipMissingVerticalReturn(horizontalLine);
+            else
+                stopAtAvailableTarget(horizontalLine, null);
             return;
         }
 
@@ -197,7 +232,10 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
 
         List<GantryLevel> levels = createVerticalLevels(verticalSystem.shaftLine());
         if (levels.isEmpty()) {
-            setOutputModifier(0);
+            if (returningHome)
+                skipMissingVerticalReturn(horizontalLine);
+            else
+                stopAtAvailableTarget(horizontalLine, verticalSystem.shaftLine());
             return;
         }
 
@@ -218,11 +256,13 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
                 verticalStage = false;
                 setLineLocked(false);
                 cycleStage = CycleStage.HORIZONTAL_HOME;
+            } else if (isHomeTarget(horizontalLine)) {
+                beginHomeSettling(horizontalLine, findHomeStop(horizontalLine));
+                return;
             } else {
                 setVerticalLineLocked(verticalSystem.shaftLine(), true);
-                toolTravel = 0;
-                toolRetractedTravel = 0;
-                cycleStage = CycleStage.TOOL_EXTENDING;
+                componentDiscoveryTicks = 0;
+                cycleStage = CycleStage.TOOL_DISCOVERY;
             }
             setChanged();
             sendData();
@@ -247,25 +287,29 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
         setLineLocked(true);
         VerticalSystem verticalSystem = findVerticalSystem(horizontalLine);
         if (verticalSystem == null) {
-            setOutputModifier(0);
+            stopAtAvailableTarget(horizontalLine, null);
             return;
         }
 
         setVerticalLineLocked(verticalSystem.shaftLine(), true);
         if (cycleStage == CycleStage.TOOL_EXTENDING) {
-            if (hasCarriedPalletNear(verticalSystem.shaftLine())) {
-                cycleStage = CycleStage.TOOL_RETRACTING;
-                toolRetractedTravel = 0;
-                setOutputModifier(-1);
-                setChanged();
-                sendData();
+            boolean hasPallet = hasPalletForkLoadNear(verticalSystem.shaftLine());
+            if (isToolPistonFullyExtended()) {
+                if (toolStartedWithPallet) {
+                    boolean releaseScheduled = !hasPallet
+                            || scheduleToolPalletReleaseAtFullExtension(verticalSystem.shaftLine());
+                    startToolRetraction(releaseScheduled);
+                } else {
+                    startToolRetraction(hasPallet);
+                }
                 return;
             }
-
             setOutputModifier(1);
             toolTravel += Math.abs(getSpeed());
             if (toolTravel > 1_000_000)
                 toolTravel = 1_000_000;
+            if (++toolTicks >= TOOL_TIMEOUT_TICKS)
+                startToolRetraction(false);
             return;
         }
 
@@ -275,6 +319,29 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
             return;
 
         setOutputModifier(0);
+        componentDiscoveryTicks = 0;
+        cycleStage = CycleStage.TOOL_SETTLING;
+        setChanged();
+        sendData();
+    }
+
+    private void updateToolSettling(ShaftLine horizontalLine) {
+        setLineLocked(true);
+        setOutputModifier(0);
+        VerticalSystem verticalSystem = findVerticalSystem(horizontalLine);
+        if (verticalSystem == null) {
+            stopAtAvailableTarget(horizontalLine, null);
+            return;
+        }
+        setVerticalLineLocked(verticalSystem.shaftLine(), true);
+        if (++componentDiscoveryTicks < TOOL_SETTLE_TICKS)
+            return;
+
+        componentDiscoveryTicks = 0;
+        if (!toolPickupSucceeded) {
+            stopAtAvailableTarget(horizontalLine, verticalSystem.shaftLine());
+            return;
+        }
         setVerticalLineLocked(verticalSystem.shaftLine(), false);
         cycleStage = CycleStage.VERTICAL_HOME;
         verticalArrived = false;
@@ -282,7 +349,158 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
         sendData();
     }
 
-    private boolean hasCarriedPalletNear(ShaftLine verticalLine) {
+    private void updateVerticalDiscovery(ShaftLine horizontalLine) {
+        setLineLocked(true);
+        setOutputModifier(0);
+
+        VerticalSystem verticalSystem = findVerticalSystem(horizontalLine);
+        if (verticalSystem != null && !createVerticalLevels(verticalSystem.shaftLine()).isEmpty()) {
+            verticalStage = true;
+            componentDiscoveryTicks = 0;
+            cycleStage = CycleStage.VERTICAL_TARGET;
+            setChanged();
+            sendData();
+            return;
+        }
+
+        if (++componentDiscoveryTicks >= COMPONENT_DISCOVERY_TICKS) {
+            if (isHomeTarget(horizontalLine))
+                beginHomeSettling(horizontalLine, findHomeStop(horizontalLine));
+            else
+                stopAtAvailableTarget(horizontalLine, null);
+        }
+    }
+
+    private void updateToolDiscovery(ShaftLine horizontalLine) {
+        setLineLocked(true);
+        setOutputModifier(0);
+
+        VerticalSystem verticalSystem = findVerticalSystem(horizontalLine);
+        if (verticalSystem != null) {
+            setVerticalLineLocked(verticalSystem.shaftLine(), true);
+            Double carriageCoordinate = findCarriageCoordinate(verticalSystem.shaftLine());
+            ToolSystem toolSystem = carriageCoordinate == null ? null
+                    : findToolSystem(verticalSystem.shaftLine(), carriageCoordinate);
+            if (toolSystem != null) {
+                toolTravel = 0;
+                toolRetractedTravel = 0;
+                toolTicks = 0;
+                toolPickupSucceeded = false;
+                toolStartedWithPallet = hasPalletForkLoadNear(verticalSystem.shaftLine());
+                componentDiscoveryTicks = 0;
+                toolPistonPos = toolSystem.pistonPos();
+                cycleStage = CycleStage.TOOL_EXTENDING;
+                setChanged();
+                sendData();
+                return;
+            }
+        }
+
+        if (++componentDiscoveryTicks >= COMPONENT_DISCOVERY_TICKS)
+            stopAtAvailableTarget(horizontalLine,
+                    verticalSystem == null ? null : verticalSystem.shaftLine());
+    }
+
+    private void startToolRetraction(boolean pickupSucceeded) {
+        cycleStage = CycleStage.TOOL_RETRACTING;
+        toolPickupSucceeded = pickupSucceeded;
+        toolRetractedTravel = 0;
+        setOutputModifier(-1);
+        setChanged();
+        sendData();
+    }
+
+    private ToolSystem findToolSystem(ShaftLine verticalLine, double carriageCoordinate) {
+        BlockPos shaftPos = verticalLine.shafts().getFirst();
+        BlockPos center = new BlockPos(shaftPos.getX(), Mth.floor(carriageCoordinate), shaftPos.getZ());
+
+        for (int x = -TOOL_SEARCH_HORIZONTAL_RADIUS; x <= TOOL_SEARCH_HORIZONTAL_RADIUS; x++) {
+            for (int y = -TOOL_SEARCH_VERTICAL_RADIUS; y <= TOOL_SEARCH_VERTICAL_RADIUS; y++) {
+                for (int z = -TOOL_SEARCH_HORIZONTAL_RADIUS; z <= TOOL_SEARCH_HORIZONTAL_RADIUS; z++) {
+                    BlockPos current = center.offset(x, y, z);
+                    if (!level.isLoaded(current))
+                        continue;
+                    BlockState state = level.getBlockState(current);
+                    if (MechanicalPistonBlock.isPiston(state))
+                        return new ToolSystem(current.immutable());
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean isToolPistonFullyExtended() {
+        if (toolPistonPos == null || !level.isLoaded(toolPistonPos)
+                || !(level.getBlockEntity(toolPistonPos) instanceof MechanicalPistonBlockEntity piston))
+            return false;
+        BlockState state = level.getBlockState(toolPistonPos);
+        int extensionLength = ((MechanicalPistonBlockEntityAccessor) piston)
+                .createWarehouse$getExtensionLength();
+        return MechanicalPistonBlock.isPiston(state)
+                && state.getValue(MechanicalPistonBlock.STATE) == PistonState.EXTENDED
+                && extensionLength > 0
+                && piston.offset + PISTON_EXTENSION_EPSILON >= extensionLength;
+    }
+
+    private boolean scheduleToolPalletReleaseAtFullExtension(ShaftLine verticalLine) {
+        BlockPos first = verticalLine.shafts().getFirst();
+        BlockPos last = verticalLine.shafts().getLast();
+        AABB searchBox = new AABB(
+                Math.min(first.getX(), last.getX()), Math.min(first.getY(), last.getY()),
+                Math.min(first.getZ(), last.getZ()), Math.max(first.getX(), last.getX()) + 1,
+                Math.max(first.getY(), last.getY()) + 1, Math.max(first.getZ(), last.getZ()) + 1)
+                .inflate(32);
+        for (CarriedPalletEntity pallet : level.getEntitiesOfClass(
+                CarriedPalletEntity.class, searchBox,
+                CarriedPalletEntity::isStationaryPalletForkTransfer)) {
+            // The stationary fork overlaps the carried pallet's block footprint.
+            // Release it as soon as retraction assembles the fork into a contraption.
+            pallet.requestPalletForkRelease();
+            return true;
+        }
+
+        if (toolPistonPos != null
+                && level.getBlockEntity(toolPistonPos) instanceof MechanicalPistonBlockEntity piston)
+            return PalletForkMovement.forceRelease(piston.movedContraption);
+        return false;
+    }
+
+    private void holdAtAvailableTarget(ShaftLine horizontalLine) {
+        setLineLocked(true);
+        setOutputModifier(0);
+        if (!verticalArrived)
+            return;
+        VerticalSystem verticalSystem = findVerticalSystem(horizontalLine);
+        if (verticalSystem != null)
+            setVerticalLineLocked(verticalSystem.shaftLine(), true);
+    }
+
+    private void stopAtAvailableTarget(ShaftLine horizontalLine, ShaftLine verticalLine) {
+        setOutputModifier(0);
+        setLineLocked(true);
+        if (verticalLine != null && verticalArrived)
+            setVerticalLineLocked(verticalLine, true);
+        if (activeContact != null)
+            GantryContactBlock.setCalling(level, activeContact, false);
+        targetAvailable = false;
+        cycleStage = CycleStage.TARGET_REACHED;
+        toolTicks = 0;
+        componentDiscoveryTicks = 0;
+        setChanged();
+        sendData();
+    }
+
+    private void skipMissingVerticalReturn(ShaftLine horizontalLine) {
+        setOutputModifier(0);
+        verticalStage = false;
+        verticalArrived = false;
+        setLineLocked(false);
+        cycleStage = CycleStage.HORIZONTAL_HOME;
+        setChanged();
+        sendData();
+    }
+
+    private boolean hasPalletForkLoadNear(ShaftLine verticalLine) {
         BlockPos first = verticalLine.shafts().getFirst();
         BlockPos last = verticalLine.shafts().getLast();
         AABB searchBox = new AABB(
@@ -291,7 +509,8 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
                 Math.max(first.getY(), last.getY()) + 1, Math.max(first.getZ(), last.getZ()) + 1)
                 .inflate(32);
         return !level.getEntitiesOfClass(CarriedPalletEntity.class, searchBox,
-                CarriedPalletEntity::isPalletForkTransfer).isEmpty();
+                pallet -> pallet.isPalletForkTransfer()
+                        || pallet.isStationaryPalletForkTransfer()).isEmpty();
     }
 
     private GantryStop findHomeStop(ShaftLine line) {
@@ -299,23 +518,87 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
         return stops.isEmpty() ? null : stops.getFirst();
     }
 
-    private void completeCycle(GantryStop homeStop) {
+    private boolean isHomeTarget(ShaftLine line) {
+        if (targetLevelIndex != 0)
+            return false;
+        GantryStop homeStop = findHomeStop(line);
+        return homeStop != null && targetCoordinate == homeStop.coordinate();
+    }
+
+    private void beginHomeSettling(ShaftLine horizontalLine, GantryStop homeStop) {
         setOutputModifier(0);
-        setLineLocked(false);
+        setLineLocked(true);
+        VerticalSystem verticalSystem = findVerticalSystem(horizontalLine);
+        if (verticalSystem != null)
+            setVerticalLineLocked(verticalSystem.shaftLine(), true);
         if (activeContact != null)
             GantryContactBlock.setCalling(level, activeContact, false);
         if (homeStop != null)
+            targetCoordinate = homeStop.coordinate();
+        targetLevelIndex = 0;
+        componentDiscoveryTicks = 0;
+        cycleStage = CycleStage.HOME_SETTLING;
+        setChanged();
+        sendData();
+    }
+
+    private void updateHomeSettling(ShaftLine horizontalLine) {
+        setOutputModifier(0);
+        setLineLocked(true);
+        VerticalSystem verticalSystem = findVerticalSystem(horizontalLine);
+        if (verticalSystem != null)
+            setVerticalLineLocked(verticalSystem.shaftLine(), true);
+
+        BlockPos first = horizontalLine.shafts().getFirst();
+        BlockPos last = horizontalLine.shafts().getLast();
+        AABB searchBox = new AABB(
+                Math.min(first.getX(), last.getX()), Math.min(first.getY(), last.getY()),
+                Math.min(first.getZ(), last.getZ()), Math.max(first.getX(), last.getX()) + 1,
+                Math.max(first.getY(), last.getY()) + 1, Math.max(first.getZ(), last.getZ()) + 1)
+                .inflate(32);
+        List<CarriedPalletEntity> carriedPallets = level.getEntitiesOfClass(
+                CarriedPalletEntity.class, searchBox,
+                pallet -> pallet.isPalletForkTransfer() || pallet.isStationaryPalletForkTransfer());
+
+        boolean placed = false;
+        for (CarriedPalletEntity pallet : carriedPallets)
+            placed |= pallet.placeStationaryPalletForkLoad();
+
+        componentDiscoveryTicks++;
+        boolean settledWithoutPallet = carriedPallets.isEmpty()
+                && componentDiscoveryTicks >= TOOL_SETTLE_TICKS;
+        if (placed || settledWithoutPallet)
+            completeCycle(findHomeStop(horizontalLine));
+    }
+
+    private void completeCycle(GantryStop homeStop) {
+        setOutputModifier(0);
+        unlockVerticalLine();
+        clearManagedVerticalLocks();
+        setLineLocked(false);
+        if (activeContact != null)
+            GantryContactBlock.setCalling(level, activeContact, false);
+        ShaftLine line = getShaftLine();
+        if (line != null)
+            for (GantryStop stop : findStopsOnLine(level, line.shafts().getFirst(), line.axis()))
+                GantryContactBlock.setCalling(level, stop.contactPos(), false);
+        if (homeStop != null)
             GantryContactBlock.pulse(level, homeStop.contactPos());
         targetCoordinate = homeStop == null ? targetCoordinate : homeStop.coordinate();
-        targetLevelIndex = 0;
+        targetLevelIndex = -1;
         targetAvailable = false;
         arrived = true;
-        verticalArrived = true;
+        verticalArrived = false;
         verticalStage = false;
         cycleStage = CycleStage.IDLE;
-        activeContact = homeStop == null ? null : homeStop.contactPos();
+        activeContact = null;
         toolTravel = 0;
         toolRetractedTravel = 0;
+        toolTicks = 0;
+        toolPickupSucceeded = false;
+        toolStartedWithPallet = false;
+        componentDiscoveryTicks = 0;
+        toolPistonPos = null;
         setChanged();
         sendData();
     }
@@ -385,6 +668,7 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
             BlockState state = level.getBlockState(shaftPos);
             if (!isShaftAlong(state, Direction.Axis.Y))
                 continue;
+            setManagedVerticalLock(shaftPos, locked);
             boolean shouldBePowered = locked || level.hasNeighborSignal(shaftPos);
             if (state.getValue(GantryShaftBlock.POWERED) == shouldBePowered)
                 continue;
@@ -401,6 +685,57 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
         VerticalSystem verticalSystem = findVerticalSystem(horizontalLine);
         if (verticalSystem != null)
             setVerticalLineLocked(verticalSystem.shaftLine(), false);
+    }
+
+    private void setManagedVerticalLock(BlockPos shaftPos, boolean locked) {
+        BlockPos immutablePos = shaftPos.immutable();
+        if (locked) {
+            if (!managedVerticalLocks.add(immutablePos))
+                return;
+            registerManagedVerticalLock(level, immutablePos);
+            return;
+        }
+        if (managedVerticalLocks.remove(immutablePos))
+            unregisterManagedVerticalLock(level, immutablePos);
+    }
+
+    private void clearManagedVerticalLocks() {
+        if (level == null || managedVerticalLocks.isEmpty())
+            return;
+        for (BlockPos shaftPos : List.copyOf(managedVerticalLocks))
+            unregisterManagedVerticalLock(level, shaftPos);
+        managedVerticalLocks.clear();
+    }
+
+    private static synchronized void registerManagedVerticalLock(Level level, BlockPos shaftPos) {
+        MANAGED_VERTICAL_LOCKS.computeIfAbsent(level, ignored -> new HashMap<>())
+                .merge(shaftPos, 1, Integer::sum);
+    }
+
+    private static synchronized void unregisterManagedVerticalLock(Level level, BlockPos shaftPos) {
+        Map<BlockPos, Integer> locks = MANAGED_VERTICAL_LOCKS.get(level);
+        if (locks == null)
+            return;
+        Integer count = locks.get(shaftPos);
+        if (count == null)
+            return;
+        if (count <= 1)
+            locks.remove(shaftPos);
+        else
+            locks.put(shaftPos, count - 1);
+        if (locks.isEmpty())
+            MANAGED_VERTICAL_LOCKS.remove(level);
+    }
+
+    public static synchronized boolean isManagedVerticalShaftLocked(Level level, BlockPos shaftPos) {
+        Map<BlockPos, Integer> locks = MANAGED_VERTICAL_LOCKS.get(level);
+        return locks != null && locks.containsKey(shaftPos);
+    }
+
+    @Override
+    public void remove() {
+        clearManagedVerticalLocks();
+        super.remove();
     }
 
     private boolean isShaftLinePowered(ShaftLine line) {
@@ -550,13 +885,11 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
 
         int bottom = verticalLine.shafts().getFirst().getY();
         int top = verticalLine.shafts().getLast().getY();
-        int count = Math.max(0, (top - bottom) / 2);
-        if (count == 0)
-            return List.of();
+        int count = Math.max(1, (top - bottom) / 2 + 1);
 
         List<GantryLevel> levels = new ArrayList<>(count);
         for (int number = 1; number <= count; number++)
-            levels.add(new GantryLevel(bottom + number * 2));
+            levels.add(new GantryLevel(bottom + (number - 1) * 2));
         return levels;
     }
 
@@ -602,7 +935,7 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
                             || !(level.getBlockState(contactPos).getBlock() instanceof GantryContactBlock))
                         continue;
 
-                    ShaftCandidate nearest = findNearestShaft(level, contactPos, axis);
+                    ShaftCandidate nearest = findNearestControlledShaft(level, contactPos, axis);
                     if (nearest == null || nearest.axis() != axis || !isOnLine(nearest.pos(), lineReference, axis))
                         continue;
                     foundContacts.add(contactPos.immutable());
@@ -649,14 +982,40 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
     }
 
     private static ShaftCandidate findNearestHorizontalShaft(Level level, BlockPos contactPos) {
-        ShaftCandidate x = findNearestShaft(level, contactPos, Direction.Axis.X);
-        ShaftCandidate z = findNearestShaft(level, contactPos, Direction.Axis.Z);
+        ShaftCandidate x = findNearestControlledShaft(level, contactPos, Direction.Axis.X);
+        ShaftCandidate z = findNearestControlledShaft(level, contactPos, Direction.Axis.Z);
         if (x == null)
             return z;
         if (z == null)
             return x;
         return squaredCrossSectionDistance(contactPos, x.pos(), x.axis())
                 <= squaredCrossSectionDistance(contactPos, z.pos(), z.axis()) ? x : z;
+    }
+
+    private static ShaftCandidate findNearestControlledShaft(Level level, BlockPos contactPos,
+            Direction.Axis axis) {
+        ShaftCandidate best = null;
+        int bestDistance = Integer.MAX_VALUE;
+        for (int first = -CONTACT_SEARCH_RADIUS; first <= CONTACT_SEARCH_RADIUS; first++) {
+            for (int second = -CONTACT_SEARCH_RADIUS; second <= CONTACT_SEARCH_RADIUS; second++) {
+                BlockPos candidatePos = switch (axis) {
+                    case X -> contactPos.offset(0, first, second);
+                    case Y -> contactPos.offset(first, 0, second);
+                    case Z -> contactPos.offset(first, second, 0);
+                };
+                if (!level.isLoaded(candidatePos)
+                        || !isShaftAlong(level.getBlockState(candidatePos), axis)
+                        || findController(level, candidatePos, axis) == null)
+                    continue;
+
+                int distance = first * first + second * second;
+                if (distance >= bestDistance)
+                    continue;
+                best = new ShaftCandidate(candidatePos.immutable(), axis);
+                bestDistance = distance;
+            }
+        }
+        return best;
     }
 
     private static ShaftCandidate findNearestShaft(Level level, BlockPos contactPos, Direction.Axis axis) {
@@ -730,6 +1089,14 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
         tag.putInt("CycleStage", cycleStage.ordinal());
         tag.putDouble("ToolTravel", toolTravel);
         tag.putDouble("ToolRetractedTravel", toolRetractedTravel);
+        tag.putInt("ToolTicks", toolTicks);
+        tag.putBoolean("ToolPickupSucceeded", toolPickupSucceeded);
+        tag.putBoolean("ToolStartedWithPallet", toolStartedWithPallet);
+        tag.putInt("ComponentDiscoveryTicks", componentDiscoveryTicks);
+        if (toolPistonPos != null) {
+            tag.putLong("ToolPistonPos", toolPistonPos.asLong());
+            tag.putBoolean("HasToolPiston", true);
+        }
         if (activeContact != null) {
             tag.putInt("ContactX", activeContact.getX());
             tag.putInt("ContactY", activeContact.getY());
@@ -762,6 +1129,12 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
         }
         toolTravel = Math.max(0, tag.getDouble("ToolTravel"));
         toolRetractedTravel = Math.max(0, tag.getDouble("ToolRetractedTravel"));
+        toolTicks = Math.max(0, tag.getInt("ToolTicks"));
+        toolPickupSucceeded = tag.getBoolean("ToolPickupSucceeded");
+        toolStartedWithPallet = tag.getBoolean("ToolStartedWithPallet");
+        componentDiscoveryTicks = Math.max(0, tag.getInt("ComponentDiscoveryTicks"));
+        toolPistonPos = tag.getBoolean("HasToolPiston")
+                ? BlockPos.of(tag.getLong("ToolPistonPos")) : null;
         activeContact = tag.getBoolean("HasContact")
                 ? new BlockPos(tag.getInt("ContactX"), tag.getInt("ContactY"), tag.getInt("ContactZ"))
                 : null;
@@ -773,6 +1146,8 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
 
     private record VerticalSystem(ShaftLine shaftLine, float transferModifier) {}
 
+    private record ToolSystem(BlockPos pistonPos) {}
+
     private enum CycleStage {
         IDLE,
         HORIZONTAL_TARGET,
@@ -780,7 +1155,12 @@ public class GantryControllerBlockEntity extends SplitShaftBlockEntity {
         TOOL_EXTENDING,
         TOOL_RETRACTING,
         VERTICAL_HOME,
-        HORIZONTAL_HOME
+        HORIZONTAL_HOME,
+        TARGET_REACHED,
+        VERTICAL_DISCOVERY,
+        TOOL_DISCOVERY,
+        TOOL_SETTLING,
+        HOME_SETTLING
     }
 
     public record GantryStop(int coordinate, BlockPos contactPos) {}

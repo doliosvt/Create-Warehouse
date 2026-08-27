@@ -66,6 +66,11 @@ public class PalletBlockEntity extends SmartBlockEntity {
     public CompoundTag saveForTransport(HolderLookup.Provider registries) {
         CompoundTag tag = new CompoundTag();
         ContainerHelper.saveAllItems(tag, crates, registries);
+        if (level != null) {
+            BlockState state = level.getBlockState(worldPosition);
+            if (state.getBlock() instanceof PalletBlock)
+                tag.putBoolean("Supports", state.getValue(PalletBlock.SUPPORTS));
+        }
         return tag;
     }
 

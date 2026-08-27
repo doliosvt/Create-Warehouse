@@ -17,6 +17,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.spindle.createwarehouse.block.ModBlocks;
 import net.spindle.createwarehouse.block.custom.PalletBlock;
+import net.spindle.createwarehouse.block.custom.PalletForkMovement;
 import net.spindle.createwarehouse.block.custom.ForkliftBlockEntity;
 import net.spindle.createwarehouse.entity.ModEntityTypes;
 import net.spindle.createwarehouse.compat.ArmPalletAccess;
@@ -49,6 +50,7 @@ public class CarriedPalletEntity extends Entity {
             SynchedEntityData.defineId(CarriedPalletEntity.class, EntityDataSerializers.OPTIONAL_UUID);
 
     private int missingPalletForkControllerTicks;
+    private boolean palletForkReleaseRequested;
 
     public CarriedPalletEntity(EntityType<?> type, Level level) {
         super(type, level);
@@ -138,6 +140,19 @@ public class CarriedPalletEntity extends Entity {
 
     public boolean isStationaryPalletForkTransfer() {
         return entityData.get(CARRIER_MODE) == STATIONARY_PALLET_FORK;
+    }
+
+    public void requestPalletForkRelease() {
+        if (isStationaryPalletForkTransfer())
+            palletForkReleaseRequested = true;
+    }
+
+    @Nullable
+    public BlockPos consumePalletForkReleaseRequest() {
+        if (!palletForkReleaseRequested)
+            return null;
+        palletForkReleaseRequested = false;
+        return getTargetPos();
     }
 
     public void attachToPalletFork(AbstractContraptionEntity contraption,
@@ -274,11 +289,26 @@ public class CarriedPalletEntity extends Entity {
     private boolean tryPlaceCarriedPallet() {
         CompoundTag palletData = net.spindle.createwarehouse.item.custom.PalletCarrierItem
                 .getPalletData(getCarrier());
-        BlockPos destination = BlockPos.containing(position().add(.25, .25, .25));
-        if (!PalletBlock.placeTransported(level(), destination, palletData))
-            return false;
+        BlockPos destination = isStationaryPalletForkTransfer()
+                ? getTargetPos()
+                : BlockPos.containing(position().add(.25, .25, .25));
+        BlockPos placedAt = destination;
+        if (!PalletBlock.placeTransported(level(), destination, palletData)) {
+            BlockPos nearestGridPosition = new BlockPos(
+                    Mth.floor(getX() + .5), Mth.floor(getY() + .5), Mth.floor(getZ() + .5));
+            if (nearestGridPosition.equals(destination)
+                    || !PalletBlock.placeTransported(level(), nearestGridPosition, palletData))
+                return false;
+            placedAt = nearestGridPosition;
+        }
+        if (isStationaryPalletForkTransfer())
+            PalletForkMovement.lockReleasedPallet(level(), placedAt);
         discard();
         return true;
+    }
+
+    public boolean placeStationaryPalletForkLoad() {
+        return isStationaryPalletForkTransfer() && tryPlaceCarriedPallet();
     }
 
     private void tickForkliftTransfer() {
@@ -369,7 +399,8 @@ public class CarriedPalletEntity extends Entity {
     public static void parkForPalletFork(Level level, UUID contraptionUuid,
                                          BlockPos localForkPos, Vec3 around,
                                          BlockPos stationaryForkPos, Vec3 palletPosition,
-                                         ItemStack carrier, @Nullable UUID carriedEntityUuid) {
+                                         ItemStack carrier, @Nullable UUID carriedEntityUuid,
+                                         @Nullable BlockPos releaseDestination) {
         List<CarriedPalletEntity> moving = findForPalletFork(
                 level, contraptionUuid, localForkPos, around);
         CarriedPalletEntity entity = null;
@@ -397,9 +428,11 @@ public class CarriedPalletEntity extends Entity {
         entity.entityData.set(CARRIER, carrier.copy());
         entity.entityData.set(ARM_POS, stationaryForkPos.immutable());
         entity.entityData.set(SOURCE_POS, palletPos);
-        entity.entityData.set(TARGET_POS, palletPos);
+        entity.entityData.set(TARGET_POS, releaseDestination == null
+                ? palletPos : releaseDestination.immutable());
         entity.entityData.set(CARRIER_MODE, STATIONARY_PALLET_FORK);
         entity.entityData.set(CONTRAPTION_UUID, Optional.empty());
+        entity.palletForkReleaseRequested = releaseDestination != null;
         entity.missingPalletForkControllerTicks = 0;
         entity.setPos(palletPosition.x, palletPosition.y, palletPosition.z);
         if (created)
@@ -455,6 +488,7 @@ public class CarriedPalletEntity extends Entity {
         entityData.set(FORKLIFT_RELEASED, tag.getBoolean("ForkliftReleased"));
         entityData.set(CONTRAPTION_UUID, tag.hasUUID("ContraptionUuid")
                 ? Optional.of(tag.getUUID("ContraptionUuid")) : Optional.empty());
+        palletForkReleaseRequested = tag.getBoolean("PalletForkReleaseRequested");
     }
 
     @Override
@@ -466,6 +500,7 @@ public class CarriedPalletEntity extends Entity {
         tag.putInt("CarrierMode", entityData.get(CARRIER_MODE));
         tag.putBoolean("ForkliftPickedUp", isForkliftPickedUp());
         tag.putBoolean("ForkliftReleased", isForkliftReleased());
+        tag.putBoolean("PalletForkReleaseRequested", palletForkReleaseRequested);
         entityData.get(CONTRAPTION_UUID).ifPresent(uuid -> tag.putUUID("ContraptionUuid", uuid));
     }
 }
